@@ -87,6 +87,11 @@ import { ISaveProfileResult } from '../../services/userDataProfile/common/userDa
 import { TerminalCompletionItem, TerminalCompletionList, TerminalShellExecutionCommandLineConfidence } from './extHostTypes.js';
 import * as tasks from './shared/tasks.js';
 
+export type IconPathDto =
+	| UriComponents
+	| { light: UriComponents; dark: UriComponents }
+	| ThemeIcon;
+
 export interface IWorkspaceData extends IStaticWorkspaceData {
 	folders: { uri: UriComponents; name: string; index: number }[];
 }

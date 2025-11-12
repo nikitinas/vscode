@@ -772,7 +772,48 @@ export interface InlineCompletion {
 	readonly completeBracketPairs?: boolean;
 
 	readonly isInlineEdit?: boolean;
+	readonly showInlineEditMenu?: boolean;
+
+	/** Only show the inline suggestion when the cursor is in the showRange. */
+	readonly showRange?: IRange;
+
+	readonly warning?: InlineCompletionWarning;
+
+	readonly hint?: InlineCompletionHint;
+
+	/**
+	 * Used for telemetry.
+	 */
+	readonly correlationId?: string | undefined;
+
+	/**
+	 * The file for which the edit applies to.
+	*/
+	readonly uri?: UriComponents;
+
+	readonly gutterMenuLinkAction?: Command;
 }
+
+export interface InlineCompletionWarning {
+	message: IMarkdownString | string;
+	icon?: IconPath;
+}
+
+export enum InlineCompletionHintStyle {
+	Code = 1,
+	Label = 2
+}
+
+export interface InlineCompletionHint {
+	/** Refers to the current document. */
+	range: IRange;
+	style: InlineCompletionHintStyle;
+	content: string;
+	jumpToEdit: boolean;
+}
+
+// TODO: add `| URI | { light: URI; dark: URI }`.
+export type IconPath = ThemeIcon;
 
 export interface InlineCompletions<TItem extends InlineCompletion = InlineCompletion> {
 	readonly items: readonly TItem[];
