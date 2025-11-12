@@ -419,6 +419,11 @@ export enum InlayHintKind {
 	Parameter = 2
 }
 
+export enum InlineCompletionHintStyle {
+	Code = 1,
+	Label = 2
+}
+
 /**
  * How an {@link InlineCompletionsProvider inline completion provider} was triggered.
  */

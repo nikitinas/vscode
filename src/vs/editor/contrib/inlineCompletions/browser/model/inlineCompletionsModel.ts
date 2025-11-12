@@ -54,7 +54,8 @@ export class InlineCompletionsModel extends Disposable {
 
 	private readonly _editorObs = observableCodeEditor(this._editor);
 
-	private readonly _onlyShowWhenCloseToCursor = this._editorObs.getOption(EditorOption.inlineSuggest).map(v => !!v.edits.experimental.onlyShowWhenCloseToCursor);
+	// Removed: _onlyShowWhenCloseToCursor - distance restriction has been removed to allow inline edits at any position
+	// private readonly _onlyShowWhenCloseToCursor = this._editorObs.getOption(EditorOption.inlineSuggest).map(v => !!v.edits.experimental.onlyShowWhenCloseToCursor);
 	private readonly _suggestPreviewEnabled = this._editorObs.getOption(EditorOption.suggest).map(v => v.preview);
 	private readonly _suggestPreviewMode = this._editorObs.getOption(EditorOption.suggest).map(v => v.previewMode);
 	private readonly _inlineSuggestMode = this._editorObs.getOption(EditorOption.inlineSuggest).map(v => v.mode);
@@ -360,9 +361,10 @@ export class InlineCompletionsModel extends Disposable {
 
 			const cursorDist = LineRange.fromRange(edit.range).distanceToLine(this._primaryPosition.read(reader).lineNumber);
 
-			if (this._onlyShowWhenCloseToCursor.read(reader) && cursorDist > 3 && !item.inlineEdit.request.isExplicitRequest && !this._inAcceptFlow.read(reader)) {
-				return undefined;
-			}
+			// Removed distance restriction: allow inline edits at any position
+			// Previously: if (this._onlyShowWhenCloseToCursor.read(reader) && cursorDist > 3 && !item.inlineEdit.request.isExplicitRequest && !this._inAcceptFlow.read(reader)) {
+			// 	return undefined;
+			// }
 			const disableCollapsing = true;
 			const currentItemIsCollapsed = !disableCollapsing && (cursorDist > 1 && this._collapsedInlineEditId.read(reader) === item.inlineEdit.semanticId);
 

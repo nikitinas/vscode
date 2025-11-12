@@ -3064,3 +3064,55 @@ export namespace LanguageModelToolResult {
 		};
 	}
 }
+
+export namespace InlineCompletionHintStyle {
+	export function from(value: vscode.InlineCompletionDisplayLocationKind): languages.InlineCompletionHintStyle {
+		if (value === types.InlineCompletionDisplayLocationKind.Label) {
+			return languages.InlineCompletionHintStyle.Label;
+		} else {
+			return languages.InlineCompletionHintStyle.Code;
+		}
+	}
+
+	export function to(kind: languages.InlineCompletionHintStyle): types.InlineCompletionDisplayLocationKind {
+		switch (kind) {
+			case languages.InlineCompletionHintStyle.Label:
+				return types.InlineCompletionDisplayLocationKind.Label;
+			default:
+				return types.InlineCompletionDisplayLocationKind.Code;
+		}
+	}
+}
+
+export namespace IconPath {
+	export function fromThemeIcon(iconPath: vscode.ThemeIcon): languages.IconPath {
+		return iconPath;
+	}
+
+	/**
+	 * Converts a {@link vscode.IconPath} to an {@link extHostProtocol.IconPathDto}.
+	 * @note This function will tolerate strings specified instead of URIs in IconPath for historical reasons.
+	 * Such strings are treated as file paths and converted using {@link URI.file} function, not {@link URI.from}.
+	 * See https://github.com/microsoft/vscode/issues/110432#issuecomment-726144556 for context.
+	 */
+	export function from(value: undefined): undefined;
+	export function from(value: vscode.IconPath): extHostProtocol.IconPathDto;
+	export function from(value: vscode.IconPath | undefined): extHostProtocol.IconPathDto | undefined;
+	export function from(value: vscode.IconPath | undefined): extHostProtocol.IconPathDto | undefined {
+		if (!value) {
+			return undefined;
+		} else if (ThemeIcon.isThemeIcon(value)) {
+			return value;
+		} else if (URI.isUri(value)) {
+			return value;
+		} else if (typeof value === 'string') {
+			return URI.file(value);
+		} else if (typeof value === 'object' && value !== null && 'dark' in value) {
+			const dark = typeof value.dark === 'string' ? URI.file(value.dark) : value.dark;
+			const light = value.light ? (typeof value.light === 'string' ? URI.file(value.light) : value.light) : dark;
+			return !dark ? undefined : { dark, light: light ?? dark };
+		} else {
+			return undefined;
+		}
+	}
+}

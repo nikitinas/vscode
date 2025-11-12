@@ -602,6 +602,25 @@ export enum EndOfLine {
 	CRLF = 2
 }
 
+export enum InlineCompletionDisplayLocationKind {
+	Code = 1,
+	Label = 2
+}
+
+export enum InlineCompletionEndOfLifeReasonKind {
+	Accepted = 0,
+	Rejected = 1,
+	Ignored = 2,
+}
+
+export enum InlineCompletionsDisposeReasonKind {
+	Other = 0,
+	Empty = 1,
+	TokenCancellation = 2,
+	LostRace = 3,
+	NotTaken = 4,
+}
+
 export enum EnvironmentVariableMutatorType {
 	Replace = 1,
 	Append = 2,

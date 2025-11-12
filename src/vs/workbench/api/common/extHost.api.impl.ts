@@ -634,6 +634,25 @@ export function createApiFactoryAndRegisterActors(accessor: ServicesAccessor): I
 				}
 				return extHostLanguageFeatures.registerInlineCompletionsProvider(extension, checkSelector(selector), provider, metadata);
 			},
+			get inlineCompletionsUnificationState() {
+				checkProposedApiEnabled(extension, "inlineCompletionsAdditions");
+				return (
+					extHostLanguageFeatures.inlineCompletionsUnificationState || {
+						codeUnification: false,
+						modelUnification: false,
+						extensionUnification: false,
+						expAssignments: [],
+					}
+				);
+			},
+			onDidChangeCompletionsUnificationState(listener, thisArg?, disposables?) {
+				checkProposedApiEnabled(extension, "inlineCompletionsAdditions");
+				return _asExtensionEvent(
+					extHostLanguageFeatures.onDidChangeCompletionsUnificationState || {
+						event: () => ({ dispose: () => {} }),
+					},
+				)(listener, thisArg, disposables);
+			},
 			registerInlineEditProvider(selector: vscode.DocumentSelector, provider: vscode.InlineEditProvider): vscode.Disposable {
 				checkProposedApiEnabled(extension, 'inlineEdit');
 				return extHostLanguageFeatures.registerInlineEditProvider(extension, checkSelector(selector), provider);
@@ -1763,6 +1782,9 @@ export function createApiFactoryAndRegisterActors(accessor: ServicesAccessor): I
 			SpeechToTextStatus: extHostTypes.SpeechToTextStatus,
 			TextToSpeechStatus: extHostTypes.TextToSpeechStatus,
 			PartialAcceptTriggerKind: extHostTypes.PartialAcceptTriggerKind,
+			InlineCompletionDisplayLocationKind: extHostTypes.InlineCompletionDisplayLocationKind,
+			InlineCompletionEndOfLifeReasonKind: extHostTypes.InlineCompletionEndOfLifeReasonKind,
+			InlineCompletionsDisposeReasonKind: extHostTypes.InlineCompletionsDisposeReasonKind,
 			KeywordRecognitionStatus: extHostTypes.KeywordRecognitionStatus,
 			ChatResponseMarkdownPart: extHostTypes.ChatResponseMarkdownPart,
 			ChatResponseFileTreePart: extHostTypes.ChatResponseFileTreePart,

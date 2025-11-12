@@ -816,5 +816,6 @@ export function createMonacoLanguagesAPI(): typeof monaco.languages {
 		// classes
 		FoldingRangeKind: languages.FoldingRangeKind,
 		SelectedSuggestionInfo: <any>languages.SelectedSuggestionInfo,
+		InlineCompletionHintStyle: languages.InlineCompletionHintStyle,
 	};
 }

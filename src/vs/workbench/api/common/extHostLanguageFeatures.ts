@@ -10,6 +10,7 @@ import { CancellationToken } from '../../../base/common/cancellation.js';
 import { NotImplementedError, isCancellationError } from '../../../base/common/errors.js';
 import { IdGenerator } from '../../../base/common/idGenerator.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
+import { Emitter } from '../../../base/common/event.js';
 import { equals, mixin } from '../../../base/common/objects.js';
 import { StopWatch } from '../../../base/common/stopwatch.js';
 import { regExpLeadsToEndlessLoop } from '../../../base/common/strings.js';
@@ -1345,7 +1346,10 @@ class InlineCompletionAdapter extends InlineCompletionAdapterBase {
 						text: context.selectedSuggestionInfo.text
 					}
 					: undefined,
-			triggerKind: this.languageTriggerKindToVSCodeTriggerKind[context.triggerKind]
+			triggerKind: this.languageTriggerKindToVSCodeTriggerKind[context.triggerKind],
+			requestUuid: (context as any).requestUuid || '',
+			requestIssuedDateTime: (context as any).requestIssuedDateTime || Date.now(),
+			earliestShownDateTime: (context as any).earliestShownDateTime || Date.now()
 		}, token);
 
 		if (!result) {
@@ -1373,7 +1377,7 @@ class InlineCompletionAdapter extends InlineCompletionAdapterBase {
 
 		return {
 			pid,
-			items: normalizedResult.map<extHostProtocol.IdentifiableInlineCompletion>((item, idx) => {
+			items: normalizedResult.map((item: any, idx: number) => {
 				let command: languages.Command | undefined = undefined;
 				if (item.command) {
 					if (!disposableStore) {
@@ -1382,21 +1386,52 @@ class InlineCompletionAdapter extends InlineCompletionAdapterBase {
 					command = this._commands.toInternal(item.command, disposableStore);
 				}
 
+				let action: languages.Command | undefined = undefined;
+				if (item.action) {
+					if (!disposableStore) {
+						disposableStore = new DisposableStore();
+					}
+					action = this._commands.toInternal(item.action, disposableStore);
+				}
+
 				const insertText = item.insertText;
-				return ({
-					insertText: typeof insertText === 'string' ? insertText : { snippet: insertText.value },
+				const convertedInsertText: string | { snippet: string } = insertText === undefined
+					? ''
+					: (typeof insertText === 'string' ? insertText : { snippet: insertText.value });
+				// eslint-disable-next-line local/code-no-dangerous-type-assertions
+				const result: extHostProtocol.IdentifiableInlineCompletion = {
+					insertText: convertedInsertText,
 					filterText: item.filterText,
 					range: item.range ? typeConvert.Range.from(item.range) : undefined,
+					showRange: (this._isAdditionsProposedApiEnabled && item.showRange) ? typeConvert.Range.from(item.showRange) : undefined,
 					command,
+					gutterMenuLinkAction: action,
 					idx: idx,
 					completeBracketPairs: this._isAdditionsProposedApiEnabled ? item.completeBracketPairs : false,
-				});
+					isInlineEdit: this._isAdditionsProposedApiEnabled ? item.isInlineEdit : false,
+					showInlineEditMenu: this._isAdditionsProposedApiEnabled ? item.showInlineEditMenu : false,
+					hint: (item.displayLocation && this._isAdditionsProposedApiEnabled) ? {
+						range: typeConvert.Range.from(item.displayLocation.range),
+						content: item.displayLocation.label,
+						style: item.displayLocation.kind ? typeConvert.InlineCompletionHintStyle.from(item.displayLocation.kind) : languages.InlineCompletionHintStyle.Code,
+						jumpToEdit: item.displayLocation.jumpToEdit ?? false,
+					} : undefined,
+					warning: (item.warning && this._isAdditionsProposedApiEnabled) ? {
+						message: typeConvert.MarkdownString.from(item.warning.message),
+						icon: item.warning.icon ? typeConvert.IconPath.fromThemeIcon(item.warning.icon) : undefined,
+					} : undefined,
+					correlationId: this._isAdditionsProposedApiEnabled ? item.correlationId : undefined,
+					uri: (this._isAdditionsProposedApiEnabled && item.uri) ? item.uri : undefined,
+				} as extHostProtocol.IdentifiableInlineCompletion;
+				return result;
 			}),
-			commands: commands.map(c => {
+			commands: commands.map((c: any) => {
 				if (!disposableStore) {
 					disposableStore = new DisposableStore();
 				}
-				return this._commands.toInternal(c, disposableStore);
+				// Handle both Command and { command: Command; icon: ThemeIcon }
+				const command = typeof c === 'object' && 'command' in c ? c.command : c;
+				return this._commands.toInternal(command, disposableStore);
 			}),
 			suppressSuggestions: false,
 			enableForwardStability,
@@ -1404,7 +1439,10 @@ class InlineCompletionAdapter extends InlineCompletionAdapterBase {
 	}
 
 	override async provideInlineEditsForRange(resource: URI, range: IRange, context: languages.InlineCompletionContext, token: CancellationToken): Promise<extHostProtocol.IdentifiableInlineCompletions | undefined> {
-		if (!this._provider.provideInlineEditsForRange) {
+		// Proposed API: provideInlineEditsForRange is not in the base interface
+		// eslint-disable-next-line local/code-no-dangerous-type-assertions
+		const provider = this._provider as any;
+		if (!provider.provideInlineEditsForRange) {
 			return undefined;
 		}
 		checkProposedApiEnabled(this._extension, 'inlineCompletionsAdditions');
@@ -1412,7 +1450,7 @@ class InlineCompletionAdapter extends InlineCompletionAdapterBase {
 		const doc = this._documents.getDocument(resource);
 		const r = typeConvert.Range.to(range);
 
-		const result = await this._provider.provideInlineEditsForRange(doc, r, {
+		const result = await provider.provideInlineEditsForRange(doc, r, {
 			selectedCompletionInfo:
 				context.selectedSuggestionInfo
 					? {
@@ -1449,7 +1487,7 @@ class InlineCompletionAdapter extends InlineCompletionAdapterBase {
 
 		return {
 			pid,
-			items: normalizedResult.map<extHostProtocol.IdentifiableInlineCompletion>((item, idx) => {
+			items: normalizedResult.map((item: any, idx: number) => {
 				let command: languages.Command | undefined = undefined;
 				if (item.command) {
 					if (!disposableStore) {
@@ -1458,21 +1496,52 @@ class InlineCompletionAdapter extends InlineCompletionAdapterBase {
 					command = this._commands.toInternal(item.command, disposableStore);
 				}
 
+				let action: languages.Command | undefined = undefined;
+				if (item.action) {
+					if (!disposableStore) {
+						disposableStore = new DisposableStore();
+					}
+					action = this._commands.toInternal(item.action, disposableStore);
+				}
+
 				const insertText = item.insertText;
-				return ({
-					insertText: typeof insertText === 'string' ? insertText : { snippet: insertText.value },
+				const convertedInsertText: string | { snippet: string } = insertText === undefined
+					? ''
+					: (typeof insertText === 'string' ? insertText : { snippet: insertText.value });
+				// eslint-disable-next-line local/code-no-dangerous-type-assertions
+				const result: extHostProtocol.IdentifiableInlineCompletion = {
+					insertText: convertedInsertText,
 					filterText: item.filterText,
 					range: item.range ? typeConvert.Range.from(item.range) : undefined,
+					showRange: (this._isAdditionsProposedApiEnabled && item.showRange) ? typeConvert.Range.from(item.showRange) : undefined,
 					command,
+					gutterMenuLinkAction: action,
 					idx: idx,
 					completeBracketPairs: this._isAdditionsProposedApiEnabled ? item.completeBracketPairs : false,
-				});
+					isInlineEdit: this._isAdditionsProposedApiEnabled ? item.isInlineEdit : false,
+					showInlineEditMenu: this._isAdditionsProposedApiEnabled ? item.showInlineEditMenu : false,
+					hint: (item.displayLocation && this._isAdditionsProposedApiEnabled) ? {
+						range: typeConvert.Range.from(item.displayLocation.range),
+						content: item.displayLocation.label,
+						style: item.displayLocation.kind ? typeConvert.InlineCompletionHintStyle.from(item.displayLocation.kind) : languages.InlineCompletionHintStyle.Code,
+						jumpToEdit: item.displayLocation.jumpToEdit ?? false,
+					} : undefined,
+					warning: (item.warning && this._isAdditionsProposedApiEnabled) ? {
+						message: typeConvert.MarkdownString.from(item.warning.message),
+						icon: item.warning.icon ? typeConvert.IconPath.fromThemeIcon(item.warning.icon) : undefined,
+					} : undefined,
+					correlationId: this._isAdditionsProposedApiEnabled ? item.correlationId : undefined,
+					uri: (this._isAdditionsProposedApiEnabled && item.uri) ? item.uri : undefined,
+				} as extHostProtocol.IdentifiableInlineCompletion;
+				return result;
 			}),
-			commands: commands.map(c => {
+			commands: commands.map((c: any) => {
 				if (!disposableStore) {
 					disposableStore = new DisposableStore();
 				}
-				return this._commands.toInternal(c, disposableStore);
+				// Handle both Command and { command: Command; icon: ThemeIcon }
+				const command = typeof c === 'object' && 'command' in c ? c.command : c;
+				return this._commands.toInternal(command, disposableStore);
 			}),
 			suppressSuggestions: false,
 			enableForwardStability,
@@ -1497,8 +1566,14 @@ class InlineCompletionAdapter extends InlineCompletionAdapterBase {
 		const completionItem = this._references.get(pid)?.items[idx];
 		if (completionItem) {
 			if (this._provider.handleDidPartiallyAcceptCompletionItem && this._isAdditionsProposedApiEnabled) {
-				this._provider.handleDidPartiallyAcceptCompletionItem(completionItem, acceptedCharacters);
-				this._provider.handleDidPartiallyAcceptCompletionItem(completionItem, typeConvert.PartialAcceptInfo.to(info));
+				// Try new API first (with PartialAcceptInfo)
+				const partialAcceptInfo = typeConvert.PartialAcceptInfo.to(info);
+				if (partialAcceptInfo && 'acceptedLength' in partialAcceptInfo && typeof partialAcceptInfo.acceptedLength === 'number') {
+					this._provider.handleDidPartiallyAcceptCompletionItem(completionItem, partialAcceptInfo as vscode.PartialAcceptInfo);
+				} else {
+					// Fallback to old API (with acceptedLength number)
+					this._provider.handleDidPartiallyAcceptCompletionItem(completionItem, acceptedCharacters);
+				}
 			}
 		}
 	}
@@ -2229,6 +2304,13 @@ export class ExtHostLanguageFeatures implements extHostProtocol.ExtHostLanguageF
 
 	private readonly _proxy: extHostProtocol.MainThreadLanguageFeaturesShape;
 	private readonly _adapter = new Map<number, AdapterData>();
+	private _inlineCompletionsUnificationState: vscode.InlineCompletionsUnificationState;
+	public get inlineCompletionsUnificationState(): vscode.InlineCompletionsUnificationState {
+		return this._inlineCompletionsUnificationState;
+	}
+
+	private readonly _onDidChangeInlineCompletionsUnificationState = new Emitter<void>();
+	readonly onDidChangeInlineCompletionsUnificationState = this._onDidChangeInlineCompletionsUnificationState.event;
 
 	constructor(
 		mainContext: extHostProtocol.IMainContext,
@@ -2241,6 +2323,12 @@ export class ExtHostLanguageFeatures implements extHostProtocol.ExtHostLanguageF
 		private readonly _extensionTelemetry: IExtHostTelemetry
 	) {
 		this._proxy = mainContext.getProxy(extHostProtocol.MainContext.MainThreadLanguageFeatures);
+		this._inlineCompletionsUnificationState = {
+			codeUnification: false,
+			modelUnification: false,
+			extensionUnification: false,
+			expAssignments: []
+		};
 	}
 
 
