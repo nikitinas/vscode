@@ -648,8 +648,8 @@ export function createApiFactoryAndRegisterActors(accessor: ServicesAccessor): I
 			onDidChangeCompletionsUnificationState(listener, thisArg?, disposables?) {
 				checkProposedApiEnabled(extension, "inlineCompletionsAdditions");
 				return _asExtensionEvent(
-					extHostLanguageFeatures.onDidChangeCompletionsUnificationState || {
-						event: () => ({ dispose: () => {} }),
+					extHostLanguageFeatures.onDidChangeInlineCompletionsUnificationState || {
+						event: () => ({ dispose: () => { } }),
 					},
 				)(listener, thisArg, disposables);
 			},
