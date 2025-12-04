@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 import * as os from 'os';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { ExecOptionsWithStringEncoding, execSync } from 'child_process';
+import { ExecSyncOptionsWithStringEncoding, execSync } from 'child_process';
 import codeInsidersCompletionSpec from './completions/code-insiders';
 import codeCompletionSpec from './completions/code';
 import cdSpec from './completions/cd';
@@ -24,7 +24,7 @@ function getBuiltinCommands(shell: string): string[] | undefined {
 			return cachedCommands;
 		}
 		const filter = (cmd: string) => cmd;
-		const options: ExecOptionsWithStringEncoding = { encoding: 'utf-8', shell };
+		const options: ExecSyncOptionsWithStringEncoding = { encoding: 'utf-8', shell };
 		switch (shellType) {
 			case 'bash': {
 				const bashOutput = execSync('compgen -b', options);
