@@ -4,11 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { autorun, autorunOpts, autorunWithStoreHandleChanges } from './autorun.js';
-import { BaseObservable, ConvenientObservable, IObservable, IObserver, IReader, ITransaction, _setKeepObserved, _setRecomputeInitiallyAndOnChange, observableValue, subtransaction, transaction } from './base.js';
+import { BaseObservable, ConvenientObservable, IObservable, IObservableWithChange, IObserver, IReader, ITransaction, _setKeepObserved, _setRecomputeInitiallyAndOnChange, observableValue, subtransaction, transaction } from './base.js';
 import { DebugNameData, DebugOwner, IDebugNameData, getDebugName, } from './debugName.js';
 import { BugIndicatingError, DisposableStore, EqualityComparer, Event, IDisposable, IValueWithChangeEvent, strictEquals, toDisposable } from './commonFacade/deps.js';
 import { derived, derivedOpts } from './derived.js';
 import { getLogger } from './logging.js';
+import { CancellationToken, cancelOnDispose } from '../../common/cancellation.js';
 
 /**
  * Represents an efficient observable whose value never changes.
@@ -661,4 +662,10 @@ export function runOnChangeWithStore<T, TChange>(observable: IObservable<T, TCha
 			store.dispose();
 		}
 	};
+}
+
+export function runOnChangeWithCancellationToken<T, TChange>(observable: IObservableWithChange<T, TChange>, cb: (value: T, previousValue: undefined | T, deltas: RemoveUndefined<TChange>[], token: CancellationToken) => Promise<void>): IDisposable {
+	return runOnChangeWithStore(observable, (value, previousValue: undefined | T, deltas, store) => {
+		cb(value, previousValue, deltas, cancelOnDispose(store));
+	});
 }

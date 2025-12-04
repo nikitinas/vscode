@@ -4605,6 +4605,8 @@ declare namespace monaco.editor {
 		 */
 		fontFamily?: string | 'default';
 		edits?: {
+			enabled?: boolean;
+			showCollapsed?: boolean;
 			experimental?: {
 				enabled?: boolean;
 				useMixedLinesDiff?: 'never' | 'whenPossible' | 'afterJumpWhenPossible';
@@ -7314,6 +7316,31 @@ declare namespace monaco.languages {
 		content: string;
 		jumpToEdit: boolean;
 	}
+
+	/**
+	 * Compatibility alias for 1.100+ code that uses InlineCompletionDisplayLocation.
+	 * In 1.100, this was a simpler interface that was later replaced by InlineCompletionHint.
+	 */
+	export interface InlineCompletionDisplayLocation {
+		range: IRange;
+		label: string;
+	}
+
+	export enum InlineCompletionEndOfLifeReasonKind {
+		Accepted = 0,
+		Rejected = 1,
+		Ignored = 2
+	}
+
+	export type InlineCompletionEndOfLifeReason<TInlineCompletion = InlineCompletion> = {
+		kind: InlineCompletionEndOfLifeReasonKind.Accepted;
+	} | {
+		kind: InlineCompletionEndOfLifeReasonKind.Rejected;
+	} | {
+		kind: InlineCompletionEndOfLifeReasonKind.Ignored;
+		supersededBy?: TInlineCompletion;
+		userTypingDisagreed: boolean;
+	};
 
 	export type IconPath = editor.ThemeIcon;
 

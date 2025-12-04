@@ -4193,6 +4193,8 @@ export interface IInlineSuggestOptions {
 	fontFamily?: string | 'default';
 
 	edits?: {
+		enabled?: boolean;
+		showCollapsed?: boolean;
 		experimental?: {
 			enabled?: boolean;
 			useMixedLinesDiff?: 'never' | 'whenPossible' | 'afterJumpWhenPossible';
@@ -4225,6 +4227,8 @@ class InlineEditorSuggest extends BaseEditorOption<EditorOption.inlineSuggest, I
 			fontFamily: 'default',
 			syntaxHighlightingEnabled: false,
 			edits: {
+				enabled: true,
+				showCollapsed: false,
 				experimental: {
 					enabled: true,
 					useMixedLinesDiff: 'never',
@@ -4308,6 +4312,8 @@ class InlineEditorSuggest extends BaseEditorOption<EditorOption.inlineSuggest, I
 			fontFamily: EditorStringOption.string(input.fontFamily, this.defaultValue.fontFamily),
 			syntaxHighlightingEnabled: boolean(input.syntaxHighlightingEnabled, this.defaultValue.syntaxHighlightingEnabled),
 			edits: {
+				enabled: boolean(input.edits?.enabled, this.defaultValue.edits.enabled),
+				showCollapsed: boolean(input.edits?.showCollapsed, this.defaultValue.edits.showCollapsed),
 				experimental: {
 					enabled: boolean(input.edits?.experimental?.enabled, this.defaultValue.edits.experimental.enabled),
 					useMixedLinesDiff: stringSet(input.edits?.experimental?.useMixedLinesDiff, this.defaultValue.edits.experimental.useMixedLinesDiff, ['never', 'whenPossible', 'afterJumpWhenPossible']),

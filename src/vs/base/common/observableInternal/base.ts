@@ -88,6 +88,12 @@ export interface IObservable<T, TChange = unknown> {
 	readonly TChange: TChange;
 }
 
+/**
+ * Compatibility alias for 1.100+ code that uses IObservableWithChange.
+ * In 1.96, IObservable already has the TChange parameter, so this is just a type alias.
+ */
+export type IObservableWithChange<T, TChange = unknown> = IObservable<T, TChange>;
+
 export interface IReader {
 	/**
 	 * Reads the value of an observable and subscribes to it.

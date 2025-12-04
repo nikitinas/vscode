@@ -812,6 +812,31 @@ export interface InlineCompletionHint {
 	jumpToEdit: boolean;
 }
 
+/**
+ * Compatibility alias for 1.100+ code that uses InlineCompletionDisplayLocation.
+ * In 1.100, this was a simpler interface that was later replaced by InlineCompletionHint.
+ */
+export interface InlineCompletionDisplayLocation {
+	range: IRange;
+	label: string;
+}
+
+export enum InlineCompletionEndOfLifeReasonKind {
+	Accepted = 0,
+	Rejected = 1,
+	Ignored = 2,
+}
+
+export type InlineCompletionEndOfLifeReason<TInlineCompletion = InlineCompletion> = {
+	kind: InlineCompletionEndOfLifeReasonKind.Accepted; // User did an explicit action to accept
+} | {
+	kind: InlineCompletionEndOfLifeReasonKind.Rejected; // User did an explicit action to reject
+} | {
+	kind: InlineCompletionEndOfLifeReasonKind.Ignored;
+	supersededBy?: TInlineCompletion;
+	userTypingDisagreed: boolean;
+};
+
 // TODO: add `| URI | { light: URI; dark: URI }`.
 export type IconPath = ThemeIcon;
 

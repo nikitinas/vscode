@@ -5,11 +5,12 @@
 
 import { createHotClass } from '../../../../../../base/common/hotReloadHelpers.js';
 import { Disposable } from '../../../../../../base/common/lifecycle.js';
-import { derived, IObservable, ISettableObservable, observableValue } from '../../../../../../base/common/observable.js';
+import { derived, IObservable, ISettableObservable } from '../../../../../../base/common/observable.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { ICodeEditor } from '../../../../../browser/editorBrowser.js';
 import { ObservableCodeEditor, observableCodeEditor } from '../../../../../browser/observableCodeEditor.js';
 import { LineRange } from '../../../../../common/core/lineRange.js';
+import { Range } from '../../../../../common/core/range.js';
 import { SingleTextEdit, TextEdit } from '../../../../../common/core/textEdit.js';
 import { TextModelText } from '../../../../../common/model/textModelText.js';
 import { InlineCompletionsModel } from '../../model/inlineCompletionsModel.js';
@@ -76,7 +77,7 @@ export class InlineEditsViewAndDiffProducer extends Disposable { // TODO: This c
 		const inlineCompletion = state.inlineCompletion;
 		if (!inlineCompletion) { return undefined; }
 
-		if (!inlineCompletion.inlineCompletion.sourceInlineCompletion.showInlineEditMenu) {
+		if (!inlineCompletion.sourceInlineCompletion.showInlineEditMenu) {
 			return undefined;
 		}
 
@@ -89,15 +90,14 @@ export class InlineEditsViewAndDiffProducer extends Disposable { // TODO: This c
 		private readonly _editor: ICodeEditor,
 		private readonly _edit: IObservable<InlineEdit | undefined>,
 		private readonly _model: IObservable<InlineCompletionsModel | undefined>,
+		private readonly _focusIsInMenu: ISettableObservable<boolean>,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
 
 		this._editorObs = observableCodeEditor(this._editor);
 
-		// Create focusIsInMenu observable for the view
-		const focusIsInMenu = observableValue<boolean>('focusIsInMenu', false);
-
-		this._register(instantiationService.createInstance(InlineEditsView, this._editor, this._inlineEditHost, this._inlineEditModel, this._ghostTextIndicator, focusIsInMenu));
+		this._register(instantiationService.createInstance(InlineEditsView, this._editor, this._inlineEditHost, this._inlineEditModel, this._ghostTextIndicator, this._focusIsInMenu));
 	}
 }
+
