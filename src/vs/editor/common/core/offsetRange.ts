@@ -51,6 +51,10 @@ export class OffsetRange implements IOffsetRange {
 		return new OffsetRange(offset, offset);
 	}
 
+	public static fromTo(start: number, endExclusive: number): OffsetRange {
+		return new OffsetRange(start, endExclusive);
+	}
+
 	constructor(public readonly start: number, public readonly endExclusive: number) {
 		if (start > endExclusive) {
 			throw new BugIndicatingError(`Invalid range: ${this.toString()}`);

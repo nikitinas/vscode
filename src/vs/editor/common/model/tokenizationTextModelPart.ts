@@ -20,7 +20,7 @@ import { IAttachedView } from '../model.js';
 import { BracketPairsTextModelPart } from './bracketPairsTextModelPart/bracketPairsImpl.js';
 import { TextModel } from './textModel.js';
 import { TextModelPart } from './textModelPart.js';
-import { DefaultBackgroundTokenizer, TokenizerWithStateStoreAndTextModel, TrackingTokenizationStateStore } from './textModelTokens.js';
+import { DefaultBackgroundTokenizer, safeTokenize, TokenizerWithStateStoreAndTextModel, TrackingTokenizationStateStore } from './textModelTokens.js';
 import { AbstractTokens, AttachedViewHandler, AttachedViews } from './tokens.js';
 import { TreeSitterTokens } from './treeSitterTokens.js';
 import { ITreeSitterParserService } from '../services/treeSitterParserService.js';
@@ -200,6 +200,10 @@ export class TokenizationTextModelPart extends TextModelPart implements ITokeniz
 
 	public getTokenTypeIfInsertingCharacter(lineNumber: number, column: number, character: string): StandardTokenType {
 		return this._tokens.getTokenTypeIfInsertingCharacter(lineNumber, column, character);
+	}
+
+	public tokenizeLinesAt(lineNumber: number, lines: string[]): LineTokens[] | null {
+		return this._tokens.tokenizeLinesAt(lineNumber, lines);
 	}
 
 	public tokenizeLineWithEdit(lineNumber: number, edit: LineEditWithAdditionalLines): ITokenizeLineWithEditResult {
@@ -646,6 +650,25 @@ class GrammarTokens extends AbstractTokens {
 		const position = this._textModel.validatePosition(new Position(lineNumber, column));
 		this.forceTokenization(position.lineNumber);
 		return this._tokenizer.getTokenTypeIfInsertingCharacter(position, character);
+	}
+
+	public tokenizeLinesAt(lineNumber: number, lines: string[]): LineTokens[] | null {
+		if (!this._tokenizer) {
+			return null;
+		}
+		const languageId = this._textModel.getLanguageId();
+		const lineTokens: LineTokens[] = [];
+		for (let i = 0; i < lines.length; i++) {
+			const currentLineNumber = lineNumber + i;
+			const startState = this._tokenizer.getStartState(currentLineNumber);
+			if (!startState) {
+				lineTokens.push(LineTokens.createEmpty(lines[i], this._languageIdCodec));
+				continue;
+			}
+			const r = safeTokenize(this._languageIdCodec, languageId, this._tokenizer.tokenizationSupport, lines[i], true, startState);
+			lineTokens.push(new LineTokens(r.tokens, lines[i], this._languageIdCodec));
+		}
+		return lineTokens.length > 0 ? lineTokens : null;
 	}
 
 	public tokenizeLineWithEdit(lineNumber: number, edit: LineEditWithAdditionalLines): ITokenizeLineWithEditResult {

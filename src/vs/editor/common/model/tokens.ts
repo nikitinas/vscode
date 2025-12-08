@@ -133,5 +133,7 @@ export abstract class AbstractTokens extends Disposable {
 
 	public abstract tokenizeLineWithEdit(lineNumber: number, edit: LineEditWithAdditionalLines): ITokenizeLineWithEditResult;
 
+	public abstract tokenizeLinesAt(lineNumber: number, lines: string[]): LineTokens[] | null;
+
 	public abstract get hasTokens(): boolean;
 }

@@ -95,6 +95,25 @@ export class TreeSitterTokens extends AbstractTokens {
 		// TODO @alexr00 implement once we have custom parsing and don't just feed in the whole text model value
 		return StandardTokenType.Other;
 	}
+	public override tokenizeLinesAt(lineNumber: number, lines: string[]): LineTokens[] | null {
+		if (this._tokenizationSupport) {
+			const lineTokens: LineTokens[] = [];
+			// In backport, guessTokensForLinesContent doesn't exist, so tokenize each line individually
+			for (let i = 0; i < lines.length; i++) {
+				const currentLineNumber = lineNumber + i;
+				const rawTokens = this._tokenizationSupport.tokenizeEncoded(currentLineNumber, this._textModel);
+				if (rawTokens) {
+					lineTokens.push(new LineTokens(rawTokens, lines[i], this._languageIdCodec));
+				} else {
+					// If tokenization fails, create empty tokens
+					lineTokens.push(LineTokens.createEmpty(lines[i], this._languageIdCodec));
+				}
+			}
+			return lineTokens.length > 0 ? lineTokens : null;
+		}
+		return null;
+	}
+
 	public override tokenizeLineWithEdit(lineNumber: number, edit: LineEditWithAdditionalLines): ITokenizeLineWithEditResult {
 		// TODO @alexr00 understand what this is for and implement
 		return { mainLineTokens: null, additionalLines: null };

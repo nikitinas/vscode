@@ -170,3 +170,35 @@ export class PathBuilder {
 		return this._data;
 	}
 }
+
+import { derived, derivedOpts, derivedObservableWithCache, IObservable } from '../../../../../../base/common/observable.js';
+
+type RemoveFalsy<T> = T extends false | undefined | null ? never : T;
+type Falsy<T> = T extends false | undefined | null ? T : never;
+
+export function mapOutFalsy<T>(obs: IObservable<T>): IObservable<IObservable<RemoveFalsy<T>> | Falsy<T>> {
+	const nonUndefinedObs = derivedObservableWithCache<T | undefined | null | false>(undefined, (reader, lastValue) => obs.read(reader) || lastValue);
+
+	return derivedOpts({
+		debugName: () => `${obs.debugName}.mapOutFalsy`
+	}, reader => {
+		nonUndefinedObs.read(reader);
+		const val = obs.read(reader);
+		if (!val) {
+			return undefined as Falsy<T>;
+		}
+
+		return nonUndefinedObs as IObservable<RemoveFalsy<T>>;
+	});
+}
+
+export function rectToProps(fn: (reader: IReader) => { left: number; top: number; right: number; bottom: number }) {
+	return {
+		left: derived(reader => /** @description left */ fn(reader).left),
+		top: derived(reader => /** @description top */ fn(reader).top),
+		width: derived(reader => /** @description width */ fn(reader).right - fn(reader).left),
+		height: derived(reader => /** @description height */ fn(reader).bottom - fn(reader).top),
+	};
+}
+
+export type FirstFnArg<T> = T extends (arg: infer U) => any ? U : never;

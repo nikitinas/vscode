@@ -5,7 +5,7 @@
 
 import { h, svgElem } from '../../../../../../base/browser/dom.js';
 import { Disposable } from '../../../../../../base/common/lifecycle.js';
-import { autorun, constObservable, derived, derivedOpts, IObservable, observableFromEvent } from '../../../../../../base/common/observable.js';
+import { autorun, constObservable, derived, derivedOpts, derivedWithStore, IObservable, observableFromEvent, observableValue } from '../../../../../../base/common/observable.js';
 import { MenuId, MenuItemAction } from '../../../../../../platform/actions/common/actions.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { ICodeEditor } from '../../../../../browser/editorBrowser.js';
@@ -15,13 +15,19 @@ import { appendRemoveOnDispose } from '../../../../../browser/widget/diffEditor/
 import { EditorOption } from '../../../../../common/config/editorOptions.js';
 import { LineRange } from '../../../../../common/core/lineRange.js';
 import { Range } from '../../../../../common/core/range.js';
-import { StringText } from '../../../../../common/core/textEdit.js';
+import { SingleTextEdit, StringText } from '../../../../../common/core/textEdit.js';
 import { lineRangeMappingFromRangeMappings, RangeMapping } from '../../../../../common/diff/rangeMapping.js';
 import { TextModel } from '../../../../../common/model/textModel.js';
 import './inlineEditsView.css';
 import { IOriginalEditorInlineDiffViewState, OriginalEditorInlineDiffView } from './inlineDiffView.js';
 import { applyEditToModifiedRangeMappings, createReindentEdit, getOffsetForPos, maxContentWidthInRange, PathBuilder, Point, StatusBarViewItem } from './utils.js';
-import { IInlineEditsIndicatorState, InlineEditsIndicator } from './inlineEditsIndicatorView.js';
+import { InlineEditsGutterIndicator } from './components/gutterIndicatorView.js';
+import { InlineEditHost, InlineEditModel } from './inlineEditsModel.js';
+import { InlineEditTabAction } from './inlineEditsViewInterface.js';
+import { InlineEditsWordReplacementView } from './inlineEditsViews/inlineEditsWordReplacementView.js';
+import { TextLength } from '../../../../../common/core/textLength.js';
+import { mapObservableArrayCached } from '../../../../../../base/common/observable.js';
+import { InlineEdit } from '../../model/inlineEdit.js';
 import { darken, lighten, registerColor, transparent } from '../../../../../../platform/theme/common/colorUtils.js';
 import { diffInserted, diffRemoved } from '../../../../../../platform/theme/common/colorRegistry.js';
 import { CustomizedMenuWorkbenchToolBar } from '../../hintsWidget/inlineCompletionsHintsWidget.js';
@@ -253,6 +259,12 @@ export class InlineEditsView extends Disposable {
 		this._register(autorun(reader => {
 			this._elements.root.classList.toggle('toolbarDropdownVisible', toolbarDropdownVisible.read(reader));
 		}));
+
+		// Initialize word replacement views
+		this._wordReplacementViews.recomputeInitiallyAndOnChange(this._store);
+
+		// Keep indicator observed
+		this._indicator.recomputeInitiallyAndOnChange(this._store);
 	}
 
 	private readonly _uiState = derived(this, reader => {
@@ -265,9 +277,22 @@ export class InlineEditsView extends Disposable {
 		let newText = edit.edit.apply(edit.originalText);
 		let diff = lineRangeMappingFromRangeMappings(mappings, edit.originalText, new StringText(newText));
 
-		let state: 'collapsed' | 'mixedLines' | 'interleavedLines' | 'sideBySide';
+		// Check if this is a single word replacement
+		const inner = diff.flatMap(d => d.innerChanges ?? []);
+		const isSingleInnerEdit = inner.length === 1;
+		const numOriginalLines = edit.originalLineRange.length;
+		const numModifiedLines = edit.modifiedLineRange.length;
+		const allInnerChangesNotTooLong = inner.every(m =>
+			TextLength.ofRange(m.originalRange).columnCount < InlineEditsWordReplacementView.MAX_LENGTH &&
+			TextLength.ofRange(m.modifiedRange).columnCount < InlineEditsWordReplacementView.MAX_LENGTH
+		);
+		const isWordReplacement = allInnerChangesNotTooLong && isSingleInnerEdit && numOriginalLines === 1 && numModifiedLines === 1 && !inner[0]?.originalRange.isEmpty();
+
+		let state: 'collapsed' | 'mixedLines' | 'interleavedLines' | 'sideBySide' | 'wordReplacements';
 		if (edit.isCollapsed) {
 			state = 'collapsed';
+		} else if (isWordReplacement) {
+			state = 'wordReplacements';
 		} else if (diff.every(m => OriginalEditorInlineDiffView.supportsInlineDiffRendering(m)) &&
 			(this._useMixedLinesDiff.read(reader) === 'whenPossible' || (edit.userJumpedToIt && this._useMixedLinesDiff.read(reader) === 'afterJumpWhenPossible'))) {
 			state = 'mixedLines';
@@ -291,6 +316,13 @@ export class InlineEditsView extends Disposable {
 			)
 		)!;
 
+		const replacements = state === 'wordReplacements'
+			? inner.map(m => {
+				const newTextObj = new StringText(newText);
+				return new SingleTextEdit(m.originalRange, newTextObj.getValueOfRange(m.modifiedRange));
+			})
+			: undefined;
+
 		return {
 			state,
 			diff,
@@ -298,6 +330,7 @@ export class InlineEditsView extends Disposable {
 			newText,
 			newTextLineCount: edit.modifiedLineRange.length,
 			originalDisplayRange: originalDisplayRange,
+			replacements,
 		};
 	});
 
@@ -523,6 +556,7 @@ export class InlineEditsView extends Disposable {
 	private readonly _inlineDiffViewState = derived<IOriginalEditorInlineDiffViewState | undefined>(this, reader => {
 		const e = this._uiState.read(reader);
 		if (!e) { return undefined; }
+		if (e.state === 'wordReplacements') { return undefined; } // Don't use inline diff view for word replacements
 
 		return {
 			modifiedText: new StringText(e.newText),
@@ -533,14 +567,78 @@ export class InlineEditsView extends Disposable {
 	});
 	protected readonly _inlineDiffView = this._register(new OriginalEditorInlineDiffView(this._editor, this._inlineDiffViewState, this._previewTextModel));
 
-	protected readonly _indicator = this._register(new InlineEditsIndicator(
-		this._editorObs,
-		derived<IInlineEditsIndicatorState | undefined>(reader => {
-			const state = this._uiState.read(reader);
-			const edit1 = this._previewEditorLayoutInfo.read(reader)?.edit1;
-			if (!edit1 || !state) { return undefined; }
-			return { editTopLeft: edit1, showAlways: state.state !== 'sideBySide' };
-		}),
-		this._model,
-	));
+	private readonly _tabAction = derived(this, reader => {
+		if (this._editorObs.isFocused.read(reader)) {
+			// TODO: Check if tab should jump or accept
+			return InlineEditTabAction.Jump;
+		}
+		return InlineEditTabAction.Inactive;
+	});
+
+	protected readonly _wordReplacementViews = mapObservableArrayCached(this, this._uiState.map(s => s?.state === 'wordReplacements' && s.replacements ? s.replacements : []), (edit, store) => {
+		const view = store.add(this._instantiationService.createInstance(InlineEditsWordReplacementView, this._editorObs, edit, this._tabAction));
+		store.add(view.onDidClick(() => {
+			const model = this._model.get();
+			if (model) {
+				model.accept(this._editor);
+			}
+		}));
+		return view;
+	});
+
+	private readonly _inlineEditModel = derived(this, reader => {
+		const model = this._model.read(reader);
+		if (!model) { return undefined; }
+		const edit = this._edit.read(reader);
+		if (!edit) { return undefined; }
+
+		// Convert InlineEditWithChanges to InlineEdit for the model
+		// edit.edit is a TextEdit, we need to get a SingleTextEdit from it
+		const singleEdit = edit.edit.toSingle(edit.originalText);
+		const inlineEdit = new InlineEdit(
+			singleEdit,
+			edit.isCollapsed,
+			edit.userJumpedToIt,
+			edit.commands,
+			edit.inlineCompletion
+		);
+		return new InlineEditModel(model, this._editor, inlineEdit, this._tabAction);
+	});
+
+	private readonly _inlineEditHost = derived(this, reader => {
+		const model = this._model.read(reader);
+		if (!model) { return undefined; }
+		return new InlineEditHost(model);
+	});
+
+	private readonly _isHoveringOverInlineEdit = derived(this, reader => {
+		// Check if hovering over word replacement views
+		return this._wordReplacementViews.read(reader).some(v => v.isHovered.read(reader));
+	});
+
+	private readonly _focusIsInMenu = observableValue(this, false);
+
+	protected readonly _indicator = derivedWithStore(this, (reader, store) => {
+		const model = this._inlineEditModel.read(reader);
+		const host = this._inlineEditHost.read(reader);
+		const edit = this._edit.read(reader);
+		if (!model || !host || !edit) { return undefined; }
+
+		const originalRange = derived(this, reader => {
+			const e = this._edit.read(reader);
+			if (!e) { return undefined; }
+			return e.originalLineRange;
+		});
+
+		return store.add(this._instantiationService.createInstance(
+			InlineEditsGutterIndicator,
+			this._editorObs,
+			originalRange,
+			constObservable(0), // verticalOffset
+			constObservable(host),
+			constObservable(model),
+			this._isHoveringOverInlineEdit,
+			this._focusIsInMenu,
+		));
+	});
 }

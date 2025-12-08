@@ -85,9 +85,12 @@ export interface ITokenizationTextModelPart {
 	getTokenTypeIfInsertingCharacter(lineNumber: number, column: number, character: string): StandardTokenType;
 
 	/**
+	 * Tokens the lines as if they were inserted at [lineNumber, lineNumber).
 	 * @internal
 	*/
 	tokenizeLineWithEdit(lineNumber: number, edit: LineEditWithAdditionalLines): ITokenizeLineWithEditResult;
+
+	tokenizeLinesAt(lineNumber: number, lines: string[]): LineTokens[] | null;
 
 	getLanguageId(): string;
 	getLanguageIdAtPosition(lineNumber: number, column: number): string;
