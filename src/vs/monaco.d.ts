@@ -1532,15 +1532,6 @@ declare namespace monaco.editor {
 		Visible = 3
 	}
 
-	export interface ThemeColor {
-		id: string;
-	}
-
-	export interface ThemeIcon {
-		readonly id: string;
-		readonly color?: ThemeColor;
-	}
-
 	/**
 	 * A single edit operation, that acts as a simple replace.
 	 * i.e. Replace text at `range` with `text` in model.
@@ -6306,6 +6297,8 @@ declare namespace monaco.editor {
 	//compatibility:
 	export type IReadOnlyModel = ITextModel;
 	export type IModel = ITextModel;
+	export type ThemeColor = monaco.ThemeColor;
+	export type ThemeIcon = monaco.ThemeIcon;
 }
 
 declare namespace monaco.languages {
