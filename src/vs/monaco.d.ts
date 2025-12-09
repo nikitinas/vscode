@@ -926,6 +926,15 @@ declare namespace monaco {
 		RTL = 1
 	}
 
+	export interface ThemeColor {
+		id: string;
+	}
+
+	export interface ThemeIcon {
+		readonly id: string;
+		readonly color?: ThemeColor;
+	}
+
 	export class Token {
 		readonly offset: number;
 		readonly type: string;
@@ -1521,15 +1530,6 @@ declare namespace monaco.editor {
 		Auto = 1,
 		Hidden = 2,
 		Visible = 3
-	}
-
-	export interface ThemeColor {
-		id: string;
-	}
-
-	export interface ThemeIcon {
-		readonly id: string;
-		readonly color?: ThemeColor;
 	}
 
 	/**
@@ -6297,6 +6297,8 @@ declare namespace monaco.editor {
 	//compatibility:
 	export type IReadOnlyModel = ITextModel;
 	export type IModel = ITextModel;
+	export type ThemeColor = monaco.ThemeColor;
+	export type ThemeIcon = monaco.ThemeIcon;
 }
 
 declare namespace monaco.languages {
