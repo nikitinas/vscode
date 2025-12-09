@@ -85,6 +85,7 @@ declare namespace monaco {
 #include(vs/editor/common/core/position): IPosition, Position
 #include(vs/editor/common/core/range): IRange, Range
 #include(vs/editor/common/core/selection): ISelection, Selection, SelectionDirection
+#include(vs/base/common/themables): ThemeColor, ThemeIcon
 #include(vs/editor/common/languages): Token
 }
 

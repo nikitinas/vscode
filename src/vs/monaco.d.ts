@@ -926,6 +926,15 @@ declare namespace monaco {
 		RTL = 1
 	}
 
+	export interface ThemeColor {
+		id: string;
+	}
+
+	export interface ThemeIcon {
+		readonly id: string;
+		readonly color?: ThemeColor;
+	}
+
 	export class Token {
 		readonly offset: number;
 		readonly type: string;
