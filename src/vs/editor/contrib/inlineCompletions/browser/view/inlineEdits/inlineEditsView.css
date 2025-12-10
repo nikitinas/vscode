@@ -150,6 +150,56 @@
 		background: var(--vscode-inlineEdit-originalChangedLineBackground);
 	}
 
+	.inlineCompletions-line-delete.inlineCompletions-line-delete-interleaved {
+		background: var(--vscode-inlineEdit-originalChangedLineBackground);
+		border-left: 1px solid var(--vscode-inlineEdit-originalBorder);
+		border-right: 1px solid var(--vscode-inlineEdit-originalBorder);
+		border-top: none;
+		border-bottom: none;
+		box-sizing: border-box;
+	}
+
+	.inlineCompletions-line-delete.inlineCompletions-line-delete-interleaved-first {
+		border-top: 1px solid var(--vscode-inlineEdit-originalBorder);
+		border-top-left-radius: 4px;
+		border-top-right-radius: 4px;
+	}
+
+	.inlineCompletions-line-delete.inlineCompletions-line-delete-interleaved-last {
+		border-bottom: 1px solid var(--vscode-inlineEdit-originalBorder);
+		border-bottom-left-radius: 4px;
+		border-bottom-right-radius: 4px;
+	}
+
+	.inlineCompletions-line-insert.inlineCompletions-line-insert-interleaved {
+		background: var(--vscode-inlineEdit-modifiedChangedLineBackground);
+		border-left: 1px solid var(--vscode-inlineEdit-modifiedBorder);
+		border-right: 1px solid var(--vscode-inlineEdit-modifiedBorder);
+		border-top: none;
+		border-bottom: none;
+		box-sizing: border-box;
+	}
+
+	.inlineCompletions-line-insert.inlineCompletions-line-insert-interleaved-first {
+		border-top: 1px solid var(--vscode-inlineEdit-modifiedBorder);
+		border-top-left-radius: 4px;
+		border-top-right-radius: 4px;
+	}
+
+	.inlineCompletions-line-insert.inlineCompletions-line-insert-interleaved-last {
+		border-bottom: 1px solid var(--vscode-inlineEdit-modifiedBorder);
+		border-bottom-left-radius: 4px;
+		border-bottom-right-radius: 4px;
+	}
+
+	/* Override diff editor styles for inline edit view zones in interleaved mode */
+	.monaco-editor .view-zones .view-lines.line-insert {
+		background-color: var(--vscode-inlineEdit-modifiedChangedLineBackground);
+		border: 1px solid var(--vscode-inlineEdit-modifiedBorder);
+		border-radius: 4px;
+		box-sizing: border-box;
+	}
+
 	.inlineCompletions-char-insert {
 		background: var(--vscode-inlineEdit-modifiedChangedTextBackground);
 	}

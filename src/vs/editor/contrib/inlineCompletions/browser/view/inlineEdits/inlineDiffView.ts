@@ -125,9 +125,51 @@ export class OriginalEditorInlineDiffView extends Disposable {
 			marginClassName: 'gutter-insert',
 		});
 
+		const diffLineAddDecorationBackgroundInterleavedFirst = ModelDecorationOptions.register({
+			className: 'inlineCompletions-line-insert inlineCompletions-line-insert-interleaved inlineCompletions-line-insert-interleaved-first',
+			description: 'line-insert-interleaved-first',
+			isWholeLine: true,
+			marginClassName: 'gutter-insert',
+		});
+
+		const diffLineAddDecorationBackgroundInterleavedMiddle = ModelDecorationOptions.register({
+			className: 'inlineCompletions-line-insert inlineCompletions-line-insert-interleaved inlineCompletions-line-insert-interleaved-middle',
+			description: 'line-insert-interleaved-middle',
+			isWholeLine: true,
+			marginClassName: 'gutter-insert',
+		});
+
+		const diffLineAddDecorationBackgroundInterleavedLast = ModelDecorationOptions.register({
+			className: 'inlineCompletions-line-insert inlineCompletions-line-insert-interleaved inlineCompletions-line-insert-interleaved-last',
+			description: 'line-insert-interleaved-last',
+			isWholeLine: true,
+			marginClassName: 'gutter-insert',
+		});
+
 		const diffLineDeleteDecorationBackground = ModelDecorationOptions.register({
 			className: 'inlineCompletions-line-delete',
 			description: 'line-delete',
+			isWholeLine: true,
+			marginClassName: 'gutter-delete',
+		});
+
+		const diffLineDeleteDecorationBackgroundInterleavedFirst = ModelDecorationOptions.register({
+			className: 'inlineCompletions-line-delete inlineCompletions-line-delete-interleaved inlineCompletions-line-delete-interleaved-first',
+			description: 'line-delete-interleaved-first',
+			isWholeLine: true,
+			marginClassName: 'gutter-delete',
+		});
+
+		const diffLineDeleteDecorationBackgroundInterleavedMiddle = ModelDecorationOptions.register({
+			className: 'inlineCompletions-line-delete inlineCompletions-line-delete-interleaved inlineCompletions-line-delete-interleaved-middle',
+			description: 'line-delete-interleaved-middle',
+			isWholeLine: true,
+			marginClassName: 'gutter-delete',
+		});
+
+		const diffLineDeleteDecorationBackgroundInterleavedLast = ModelDecorationOptions.register({
+			className: 'inlineCompletions-line-delete inlineCompletions-line-delete-interleaved inlineCompletions-line-delete-interleaved-last',
+			description: 'line-delete-interleaved-last',
 			isWholeLine: true,
 			marginClassName: 'gutter-delete',
 		});
@@ -156,19 +198,71 @@ export class OriginalEditorInlineDiffView extends Disposable {
 		});
 
 		for (const m of diff.diff) {
-			const showFullLineDecorations = true;
+			const showFullLineDecorations = diff.mode !== 'sideBySide';
 			if (showFullLineDecorations) {
 				if (!m.original.isEmpty) {
-					originalDecorations.push({
-						range: m.original.toInclusiveRange()!,
-						options: diffLineDeleteDecorationBackground,
-					});
+					if (diff.mode === 'interleavedLines') {
+						const originalRange = m.original.toInclusiveRange()!;
+						const numLines = originalRange.endLineNumber - originalRange.startLineNumber + 1;
+						if (numLines === 1) {
+							originalDecorations.push({
+								range: originalRange,
+								options: diffLineDeleteDecorationBackgroundInterleavedFirst,
+							});
+						} else {
+							originalDecorations.push({
+								range: new Range(originalRange.startLineNumber, 1, originalRange.startLineNumber, Number.MAX_SAFE_INTEGER),
+								options: diffLineDeleteDecorationBackgroundInterleavedFirst,
+							});
+							for (let lineNum = originalRange.startLineNumber + 1; lineNum < originalRange.endLineNumber; lineNum++) {
+								originalDecorations.push({
+									range: new Range(lineNum, 1, lineNum, Number.MAX_SAFE_INTEGER),
+									options: diffLineDeleteDecorationBackgroundInterleavedMiddle,
+								});
+							}
+							originalDecorations.push({
+								range: new Range(originalRange.endLineNumber, 1, originalRange.endLineNumber, Number.MAX_SAFE_INTEGER),
+								options: diffLineDeleteDecorationBackgroundInterleavedLast,
+							});
+						}
+					} else {
+						originalDecorations.push({
+							range: m.original.toInclusiveRange()!,
+							options: diffLineDeleteDecorationBackground,
+						});
+					}
 				}
 				if (!m.modified.isEmpty) {
-					modifiedDecorations.push({
-						range: m.modified.toInclusiveRange()!,
-						options: diffLineAddDecorationBackground,
-					});
+					if (diff.mode === 'interleavedLines') {
+						const modifiedRange = m.modified.toInclusiveRange()!;
+						const numLines = modifiedRange.endLineNumber - modifiedRange.startLineNumber + 1;
+						if (numLines === 1) {
+							modifiedDecorations.push({
+								range: modifiedRange,
+								options: diffLineAddDecorationBackgroundInterleavedFirst,
+							});
+						} else {
+							modifiedDecorations.push({
+								range: new Range(modifiedRange.startLineNumber, 1, modifiedRange.startLineNumber, Number.MAX_SAFE_INTEGER),
+								options: diffLineAddDecorationBackgroundInterleavedFirst,
+							});
+							for (let lineNum = modifiedRange.startLineNumber + 1; lineNum < modifiedRange.endLineNumber; lineNum++) {
+								modifiedDecorations.push({
+									range: new Range(lineNum, 1, lineNum, Number.MAX_SAFE_INTEGER),
+									options: diffLineAddDecorationBackgroundInterleavedMiddle,
+								});
+							}
+							modifiedDecorations.push({
+								range: new Range(modifiedRange.endLineNumber, 1, modifiedRange.endLineNumber, Number.MAX_SAFE_INTEGER),
+								options: diffLineAddDecorationBackgroundInterleavedLast,
+							});
+						}
+					} else {
+						modifiedDecorations.push({
+							range: m.modified.toInclusiveRange()!,
+							options: diffLineAddDecorationBackground,
+						});
+					}
 				}
 			}
 

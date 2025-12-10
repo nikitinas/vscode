@@ -279,14 +279,12 @@ export class InlineEditsView extends Disposable {
 
 		// Check if this is a single word replacement
 		const inner = diff.flatMap(d => d.innerChanges ?? []);
-		const isSingleInnerEdit = inner.length === 1;
-		const numOriginalLines = edit.originalLineRange.length;
-		const numModifiedLines = edit.modifiedLineRange.length;
-		const allInnerChangesNotTooLong = inner.every(m =>
-			TextLength.ofRange(m.originalRange).columnCount < InlineEditsWordReplacementView.MAX_LENGTH &&
-			TextLength.ofRange(m.modifiedRange).columnCount < InlineEditsWordReplacementView.MAX_LENGTH
-		);
-		const isWordReplacement = allInnerChangesNotTooLong && isSingleInnerEdit && numOriginalLines === 1 && numModifiedLines === 1 && !inner[0]?.originalRange.isEmpty();
+
+		const isWordReplacement = inner.length === 1
+			&& edit.originalLineRange.length === 1 && edit.modifiedLineRange.length === 1
+			&& !inner[0].modifiedRange.isEmpty() && !inner[0].originalRange.isEmpty()
+			&& TextLength.ofRange(inner[0].originalRange).columnCount < InlineEditsWordReplacementView.MAX_LENGTH
+			&& TextLength.ofRange(inner[0].modifiedRange).columnCount < InlineEditsWordReplacementView.MAX_LENGTH;
 
 		let state: 'collapsed' | 'mixedLines' | 'interleavedLines' | 'sideBySide' | 'wordReplacements';
 		if (edit.isCollapsed) {
