@@ -4604,14 +4604,6 @@ declare namespace monaco.editor {
 		 * Font family for inline suggestions.
 		 */
 		fontFamily?: string | 'default';
-		edits?: {
-			experimental?: {
-				enabled?: boolean;
-				useMixedLinesDiff?: 'never' | 'whenPossible' | 'afterJumpWhenPossible';
-				useInterleavedLinesDiff?: 'never' | 'always' | 'afterJump';
-				onlyShowWhenCloseToCursor?: boolean;
-			};
-		};
 	}
 
 	type RequiredRecursive<T> = {

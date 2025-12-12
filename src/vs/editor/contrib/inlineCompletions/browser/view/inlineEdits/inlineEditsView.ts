@@ -5,7 +5,7 @@
 
 import { h, svgElem } from '../../../../../../base/browser/dom.js';
 import { Disposable } from '../../../../../../base/common/lifecycle.js';
-import { autorun, constObservable, derived, derivedOpts, derivedWithStore, IObservable, observableFromEvent, observableValue } from '../../../../../../base/common/observable.js';
+import { autorun, constObservable, derived, derivedOpts, derivedWithStore, IObservable, observableFromEvent, observableValue, mapObservableArrayCached } from '../../../../../../base/common/observable.js';
 import { MenuId, MenuItemAction } from '../../../../../../platform/actions/common/actions.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { ICodeEditor } from '../../../../../browser/editorBrowser.js';
@@ -26,7 +26,6 @@ import { InlineEditHost, InlineEditModel } from './inlineEditsModel.js';
 import { InlineEditTabAction } from './inlineEditsViewInterface.js';
 import { InlineEditsWordReplacementView } from './inlineEditsViews/inlineEditsWordReplacementView.js';
 import { TextLength } from '../../../../../common/core/textLength.js';
-import { mapObservableArrayCached } from '../../../../../../base/common/observable.js';
 import { InlineEdit } from '../../model/inlineEdit.js';
 import { darken, lighten, registerColor, transparent } from '../../../../../../platform/theme/common/colorUtils.js';
 import { diffInserted, diffRemoved } from '../../../../../../platform/theme/common/colorRegistry.js';
@@ -113,8 +112,8 @@ export class InlineEditsView extends Disposable {
 		svgElem('svg@svg2', { transform: 'translate(-0.5 -0.5)', style: { overflow: 'visible', pointerEvents: 'none', position: 'absolute' }, }, []),
 	]);
 
-	private readonly _useMixedLinesDiff = observableCodeEditor(this._editor).getOption(EditorOption.inlineSuggest).map(s => s.edits.experimental.useMixedLinesDiff);
-	private readonly _useInterleavedLinesDiff = observableCodeEditor(this._editor).getOption(EditorOption.inlineSuggest).map(s => s.edits.experimental.useInterleavedLinesDiff);
+	private readonly _allowHorizontalCodeShifting = observableCodeEditor(this._editor).getOption(EditorOption.inlineSuggest).map(s => s.edits.allowHorizontalCodeShifting);
+	private readonly _allowVerticalCodeShifting = observableCodeEditor(this._editor).getOption(EditorOption.inlineSuggest).map(s => s.edits.allowVerticalCodeShifting);
 
 	constructor(
 		private readonly _editor: ICodeEditor,
@@ -291,13 +290,28 @@ export class InlineEditsView extends Disposable {
 			state = 'collapsed';
 		} else if (isWordReplacement) {
 			state = 'wordReplacements';
-		} else if (diff.every(m => OriginalEditorInlineDiffView.supportsInlineDiffRendering(m)) &&
-			(this._useMixedLinesDiff.read(reader) === 'whenPossible' || (edit.userJumpedToIt && this._useMixedLinesDiff.read(reader) === 'afterJumpWhenPossible'))) {
-			state = 'mixedLines';
-		} else if ((this._useInterleavedLinesDiff.read(reader) === 'always' || (edit.userJumpedToIt && this._useInterleavedLinesDiff.read(reader) === 'afterJump'))) {
-			state = 'interleavedLines';
 		} else {
-			state = 'sideBySide';
+			// Use allowHorizontalCodeShifting and allowVerticalCodeShifting settings to determine the diff presentation mode
+			const allowHorizontal = this._allowHorizontalCodeShifting.read(reader);
+			const allowVertical = this._allowVerticalCodeShifting.read(reader);
+
+			// Check if all diffs support inline rendering (mixedLines mode)
+			const supportsMixedLines = diff.every(m => OriginalEditorInlineDiffView.supportsInlineDiffRendering(m));
+
+			if (!allowHorizontal && !allowVertical) {
+				// When both code shifting options are disabled, always use side-by-side
+				state = 'sideBySide';
+			} else if (allowHorizontal && supportsMixedLines) {
+				// When horizontal code shifting is enabled and diff supports it, use mixedLines
+				state = 'mixedLines';
+			} else if (allowVertical) {
+				// When vertical code shifting is enabled, use interleavedLines
+				state = 'interleavedLines';
+			} else {
+				// Fallback: horizontal is enabled but diff doesn't support mixedLines, or only horizontal is enabled
+				// Use side-by-side
+				state = 'sideBySide';
+			}
 		}
 
 		if (state === 'sideBySide') {

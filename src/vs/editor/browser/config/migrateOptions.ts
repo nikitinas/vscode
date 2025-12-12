@@ -232,3 +232,41 @@ registerEditorSettingMigration('lightbulb.enabled', (value, read, write) => {
 	}
 });
 
+// NES Code Shifting - migrate from boolean codeShifting to new boolean options
+registerEditorSettingMigration('inlineSuggest.edits.codeShifting', (value, read, write) => {
+	if (typeof value === 'boolean') {
+		write('inlineSuggest.edits.codeShifting', undefined);
+		write('inlineSuggest.edits.allowHorizontalCodeShifting', value);
+		write('inlineSuggest.edits.allowVerticalCodeShifting', value);
+	}
+});
+
+// NES Code Shifting - migrate from enum allowCodeShifting to new boolean options
+registerEditorSettingMigration('inlineSuggest.edits.allowCodeShifting', (value, read, write) => {
+	if (typeof value === 'string') {
+		write('inlineSuggest.edits.allowCodeShifting', undefined);
+		if (value === 'never') {
+			write('inlineSuggest.edits.allowHorizontalCodeShifting', false);
+			write('inlineSuggest.edits.allowVerticalCodeShifting', false);
+		} else if (value === 'horizontal') {
+			write('inlineSuggest.edits.allowHorizontalCodeShifting', true);
+			write('inlineSuggest.edits.allowVerticalCodeShifting', false);
+		} else if (value === 'always') {
+			write('inlineSuggest.edits.allowHorizontalCodeShifting', true);
+			write('inlineSuggest.edits.allowVerticalCodeShifting', true);
+		}
+	}
+});
+
+// NES Code Shifting - migrate from renderSideBySide to allowHorizontalCodeShifting
+registerEditorSettingMigration('inlineSuggest.edits.renderSideBySide', (value, read, write) => {
+	if (typeof value === 'string') {
+		write('inlineSuggest.edits.renderSideBySide', undefined);
+		if (value === 'never') {
+			// If renderSideBySide is 'never', disable horizontal code shifting
+			write('inlineSuggest.edits.allowHorizontalCodeShifting', false);
+		}
+		// If value === 'auto', that's the default behavior, so we don't need to set anything
+	}
+});
+
