@@ -217,3 +217,22 @@
 		border-left: solid var(--vscode-inlineEdit-modifiedChangedTextBackground) 3px;
 	}
 }
+
+.monaco-menu-option {
+	color: var(--vscode-editorActionList-foreground);
+	font-size: 13px;
+	padding: 0 10px;
+	line-height: 26px;
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	border-radius: 4px;
+	cursor: pointer;
+}
+
+.monaco-menu-option.active {
+	background: var(--vscode-editorActionList-focusBackground);
+	color: var(--vscode-editorActionList-focusForeground);
+	outline: 1px solid var(--vscode-menu-selectionBorder, transparent);
+	outline-offset: -1px;
+}

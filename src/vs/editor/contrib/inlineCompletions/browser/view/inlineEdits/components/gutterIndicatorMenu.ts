@@ -46,15 +46,33 @@ export class GutterIndicatorMenuContent {
 		const activeElement = observableValue<string | undefined>('active', undefined);
 
 		const createOptionArgs = (options: { id: string; title: string; icon: IObservable<ThemeIcon> | ThemeIcon; commandId: string | IObservable<string>; commandArgs?: unknown[] }): FirstFnArg<typeof option> => {
+			if (typeof options.commandId === 'string') {
+				const commandId = options.commandId;
+				return {
+					title: options.title,
+					icon: options.icon,
+					keybinding: this._getKeybinding(options.commandArgs ? undefined : commandId),
+					isActive: activeElement.map(v => v === options.id),
+					onHoverChange: v => activeElement.set(v ? options.id : undefined, undefined),
+					onAction: () => {
+						this._close(true);
+						return this._commandService.executeCommand(commandId, ...(options.commandArgs ?? []));
+					},
+				};
+			}
+			const commandIdObservable = options.commandId;
 			return {
 				title: options.title,
 				icon: options.icon,
-				keybinding: typeof options.commandId === 'string' ? this._getKeybinding(options.commandArgs ? undefined : options.commandId) : derived(reader => typeof options.commandId === 'string' ? undefined : this._getKeybinding(options.commandArgs ? undefined : options.commandId.read(reader)).read(reader)),
+				keybinding: derived(reader => {
+					const cmdId = commandIdObservable.read(reader);
+					return this._getKeybinding(options.commandArgs ? undefined : cmdId).read(reader);
+				}),
 				isActive: activeElement.map(v => v === options.id),
 				onHoverChange: v => activeElement.set(v ? options.id : undefined, undefined),
 				onAction: () => {
 					this._close(true);
-					return this._commandService.executeCommand(typeof options.commandId === 'string' ? options.commandId : options.commandId.get(), ...(options.commandArgs ?? []));
+					return this._commandService.executeCommand(commandIdObservable.get(), ...(options.commandArgs ?? []));
 				},
 			};
 		};
@@ -132,7 +150,7 @@ export class GutterIndicatorMenuContent {
 		if (!commandId) {
 			return constObservable(undefined);
 		}
-		return observableFromEvent(this._contextKeyService.onDidChangeContext, () => this._keybindingService.lookupKeybinding(commandId));
+		return observableFromEvent(this._contextKeyService.onDidChangeContext, () => this._keybindingService.lookupKeybinding(commandId, this._contextKeyService));
 	}
 }
 
@@ -179,7 +197,7 @@ function option(props: {
 		},
 		tabIndex: 0,
 		style: {
-			borderRadius: 3,
+			borderRadius: 3, // same as hover widget border radius
 		}
 	}, [
 		n.elem('span', {
