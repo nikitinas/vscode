@@ -20,13 +20,11 @@ import { IContextKeyService } from '../../../../../../../platform/contextkey/com
 import { nativeHoverDelegate } from '../../../../../../../platform/hover/browser/hover.js';
 import { IKeybindingService } from '../../../../../../../platform/keybinding/common/keybinding.js';
 import { asCssVariable, descriptionForeground, editorActionListForeground, editorHoverBorder } from '../../../../../../../platform/theme/common/colorRegistry.js';
-import { hideInlineCompletionId, inlineSuggestCommitId, jumpToNextInlineEditId, toggleShowCollapsedId } from '../../../controller/commandIds.js';
+import { hideInlineCompletionId, inlineSuggestCommitId, jumpToNextInlineEditId } from '../../../controller/commandIds.js';
 import { IInlineEditModel, InlineEditTabAction } from '../inlineEditsViewInterface.js';
 import { FirstFnArg } from '../utils.js';
 
 export class GutterIndicatorMenuContent {
-
-	private readonly _inlineEditsShowCollapsed: IObservable<boolean>;
 
 	constructor(
 		private readonly _model: IInlineEditModel,
@@ -35,7 +33,6 @@ export class GutterIndicatorMenuContent {
 		@IKeybindingService private readonly _keybindingService: IKeybindingService,
 		@ICommandService private readonly _commandService: ICommandService,
 	) {
-		this._inlineEditsShowCollapsed = constObservable(false); // Not available in backport
 	}
 
 	public toDisposableLiveElement(): LiveElement {
@@ -95,21 +92,6 @@ export class GutterIndicatorMenuContent {
 
 		const extensionCommands = this._model.extensionCommands.map((c, idx) => option(createOptionArgs({ id: c.id + '_' + idx, title: c.title, icon: Codicon.symbolEvent, commandId: c.id, commandArgs: c.arguments })));
 
-		const toggleCollapsedMode = this._inlineEditsShowCollapsed.map(showCollapsed => showCollapsed ?
-			option(createOptionArgs({
-				id: 'showExpanded',
-				title: localize('showExpanded', "Show Expanded"),
-				icon: Codicon.expandAll,
-				commandId: toggleShowCollapsedId
-			}))
-			: option(createOptionArgs({
-				id: 'showCollapsed',
-				title: localize('showCollapsed', "Show Collapsed"),
-				icon: Codicon.collapseAll,
-				commandId: toggleShowCollapsedId
-			}))
-		);
-
 		const settings = option(createOptionArgs({
 			id: 'settings',
 			title: localize('settings', "Settings"),
@@ -135,7 +117,6 @@ export class GutterIndicatorMenuContent {
 			title,
 			gotoAndAccept,
 			reject,
-			toggleCollapsedMode,
 			settings,
 
 			extensionCommands.length ? separator() : undefined,

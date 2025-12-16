@@ -31,7 +31,6 @@ export interface IInlineEditModel {
 	extensionCommands: Command[];
 	inlineEdit: InlineEditWithChanges;
 	tabAction: IObservable<InlineEditTabAction>;
-	showCollapsed: IObservable<boolean>;
 
 	handleInlineEditShown(): void;
 	accept(): void;

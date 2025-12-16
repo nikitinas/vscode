@@ -24,7 +24,6 @@ export class InlineEditModel implements IInlineEditModel {
 	readonly displayName: string;
 	readonly extensionCommands: Command[];
 
-	readonly showCollapsed: IObservable<boolean>;
 	readonly inlineEdit: InlineEditWithChanges;
 
 	constructor(
@@ -48,9 +47,6 @@ export class InlineEditModel implements IInlineEditModel {
 			inlineEdit.commands,
 			inlineEdit.inlineCompletion
 		);
-
-		// Create a simple showCollapsed observable - adapt based on your backport's structure
-		this.showCollapsed = observableValue(this, false);
 	}
 
 	accept() {

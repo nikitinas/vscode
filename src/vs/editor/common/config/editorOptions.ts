@@ -4197,8 +4197,6 @@ export interface IInlineSuggestOptions {
 
 		allowVerticalCodeShifting?: boolean;
 
-		showCollapsed?: boolean;
-
 		/**
 		* @internal
 		*/
@@ -4206,7 +4204,6 @@ export interface IInlineSuggestOptions {
 
 		experimental?: {
 			enabled?: boolean;
-			onlyShowWhenCloseToCursor?: boolean;
 		};
 	};
 }
@@ -4235,12 +4232,10 @@ class InlineEditorSuggest extends BaseEditorOption<EditorOption.inlineSuggest, I
 			syntaxHighlightingEnabled: false,
 			edits: {
 				enabled: true,
-				showCollapsed: false,
 				allowHorizontalCodeShifting: true,
 				allowVerticalCodeShifting: true,
 				experimental: {
 					enabled: true,
-					onlyShowWhenCloseToCursor: true,
 				},
 			},
 		};
@@ -4284,11 +4279,6 @@ class InlineEditorSuggest extends BaseEditorOption<EditorOption.inlineSuggest, I
 					default: defaults.edits.experimental.enabled,
 					description: nls.localize('inlineSuggest.edits.experimental.enabled', "Controls whether to enable experimental edits in inline suggestions.")
 				},
-				'editor.inlineSuggest.edits.experimental.onlyShowWhenCloseToCursor': {
-					type: 'boolean',
-					default: defaults.edits.experimental.onlyShowWhenCloseToCursor,
-					description: nls.localize('inlineSuggest.edits.experimental.onlyShowWhenCloseToCursor', "Controls whether to only show inline suggestions when the cursor is close to the suggestion.")
-				},
 				'editor.inlineSuggest.edits.allowHorizontalCodeShifting': {
 					type: 'boolean',
 					default: defaults.edits.allowHorizontalCodeShifting,
@@ -4299,12 +4289,6 @@ class InlineEditorSuggest extends BaseEditorOption<EditorOption.inlineSuggest, I
 					type: 'boolean',
 					default: defaults.edits.allowVerticalCodeShifting,
 					description: nls.localize('inlineSuggest.edits.allowVerticalCodeShifting', "Controls whether showing a suggestion can shift the code vertically to insert new code lines between existing lines."),
-					tags: ['nextEditSuggestions']
-				},
-				'editor.inlineSuggest.edits.showCollapsed': {
-					type: 'boolean',
-					default: defaults.edits.showCollapsed,
-					description: nls.localize('inlineSuggest.edits.showCollapsed', "Controls whether the suggestion will show as collapsed until jumping to it."),
 					tags: ['nextEditSuggestions']
 				},
 			}
@@ -4326,12 +4310,10 @@ class InlineEditorSuggest extends BaseEditorOption<EditorOption.inlineSuggest, I
 			syntaxHighlightingEnabled: boolean(input.syntaxHighlightingEnabled, this.defaultValue.syntaxHighlightingEnabled),
 			edits: {
 				enabled: boolean(input.edits?.enabled, this.defaultValue.edits.enabled),
-				showCollapsed: boolean(input.edits?.showCollapsed, this.defaultValue.edits.showCollapsed),
 				allowHorizontalCodeShifting: boolean(input.edits?.allowHorizontalCodeShifting, this.defaultValue.edits.allowHorizontalCodeShifting),
 				allowVerticalCodeShifting: boolean(input.edits?.allowVerticalCodeShifting, this.defaultValue.edits.allowVerticalCodeShifting),
 				experimental: {
 					enabled: boolean(input.edits?.experimental?.enabled, this.defaultValue.edits.experimental.enabled),
-					onlyShowWhenCloseToCursor: boolean(input.edits?.experimental?.onlyShowWhenCloseToCursor, this.defaultValue.edits.experimental.onlyShowWhenCloseToCursor),
 				},
 			},
 		};
