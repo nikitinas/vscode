@@ -54,6 +54,7 @@ export class InlineEditsViewAndDiffProducer extends Disposable {
 
 	private readonly _inlineEditPromise = derived<IObservable<InlineEditWithChanges | undefined> | undefined>(this, (reader) => {
 		const inlineEdit = this._edit.read(reader);
+		console.log('[InlineEditsViewAndDiffProducer] _inlineEditPromise - _edit:', inlineEdit ? 'exists' : 'undefined');
 		if (!inlineEdit) { return undefined; }
 
 		//if (inlineEdit.text.trim() === '') { return undefined; }
@@ -86,7 +87,12 @@ export class InlineEditsViewAndDiffProducer extends Disposable {
 		});
 	});
 
-	private readonly _inlineEdit = derivedOpts({ owner: this, equalsFn: equalsIfDefined(itemEquals()) }, reader => this._inlineEditPromise.read(reader)?.read(reader));
+	private readonly _inlineEdit = derivedOpts({ owner: this, equalsFn: equalsIfDefined(itemEquals()) }, reader => {
+		const promise = this._inlineEditPromise.read(reader);
+		const result = promise?.read(reader);
+		console.log('[InlineEditsViewAndDiffProducer] _inlineEdit - promise:', promise ? 'exists' : 'undefined', 'result:', result ? 'exists' : 'undefined');
+		return result;
+	});
 
 	constructor(
 		private readonly _editor: ICodeEditor,

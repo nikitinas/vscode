@@ -230,12 +230,18 @@ export class ObservableCodeEditor extends Disposable {
 	}
 
 	public setDecorations(decorations: IObservable<IModelDeltaDecoration[]>): IDisposable {
+		console.log('[ObservableCodeEditor] setDecorations - CALLED, decorations observable:', decorations ? 'exists' : 'undefined');
 		const d = new DisposableStore();
 		const decorationsCollection = this.editor.createDecorationsCollection();
+		console.log('[ObservableCodeEditor] setDecorations - creating autorun');
 		d.add(autorunOpts({ owner: this, debugName: () => `Apply decorations from ${decorations.debugName}` }, reader => {
+			console.log('[ObservableCodeEditor] AUTORUN setDecorations - START (running)');
 			const d = decorations.read(reader);
+			console.log('[ObservableCodeEditor] AUTORUN setDecorations - read decorations, count:', d.length);
 			decorationsCollection.set(d);
+			console.log('[ObservableCodeEditor] AUTORUN setDecorations - set decorations, collection size:', decorationsCollection.length);
 		}));
+		console.log('[ObservableCodeEditor] setDecorations - autorun registered, returning disposable');
 		d.add({
 			dispose: () => {
 				decorationsCollection.clear();

@@ -32,7 +32,13 @@ export class InlineCompletionsView extends Disposable {
 	).recomputeInitiallyAndOnChange(store)
 	).recomputeInitiallyAndOnChange(this._store);
 
-	private readonly _inlineEdit = derived(this, reader => this._model.read(reader)?.inlineEditState.read(reader)?.inlineEdit);
+	private readonly _inlineEdit = derived(this, reader => {
+		const model = this._model.read(reader);
+		const inlineEditState = model?.inlineEditState.read(reader);
+		const inlineEdit = inlineEditState?.inlineEdit;
+		console.log('[InlineCompletionsView] _inlineEdit - model:', model ? 'exists' : 'undefined', 'inlineEditState:', inlineEditState ? 'exists' : 'undefined', 'inlineEdit:', inlineEdit ? 'exists' : 'undefined');
+		return inlineEdit;
+	});
 	private readonly _everHadInlineEdit = derivedObservableWithCache<boolean>(this, (reader, last) => last || !!this._inlineEdit.read(reader));
 	protected readonly _inlineEditWidget = derivedDisposable(reader => {
 		if (!this._everHadInlineEdit.read(reader)) {

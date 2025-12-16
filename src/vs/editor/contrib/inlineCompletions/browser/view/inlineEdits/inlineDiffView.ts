@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Disposable } from '../../../../../../base/common/lifecycle.js';
-import { autorunWithStore, derived, IObservable, observableFromEvent } from '../../../../../../base/common/observable.js';
+import { autorun, autorunWithStore, derived, IObservable, observableFromEvent } from '../../../../../../base/common/observable.js';
 import { ICodeEditor } from '../../../../../browser/editorBrowser.js';
 import { observableCodeEditor } from '../../../../../browser/observableCodeEditor.js';
 import { rangeIsSingleLine } from '../../../../../browser/widget/diffEditor/components/diffEditorViewZones/diffEditorViewZones.js';
@@ -39,8 +39,36 @@ export class OriginalEditorInlineDiffView extends Disposable {
 		private readonly _modifiedTextModel: ITextModel,
 	) {
 		super();
+		console.log('[OriginalEditorInlineDiffView] CONSTRUCTOR - START (diff view being created), _state observable:', _state ? 'exists' : 'undefined');
 
-		this._register(observableCodeEditor(this._originalEditor).setDecorations(this._decorations.map(d => d?.originalDecorations ?? [])));
+		// Ensure _decorations is observed so it recomputes when _state changes
+		// This is critical: derived observables only recompute when read
+		// IMPORTANT: Read _state directly since _decorations depends on it, and read _decorations to ensure it recomputes
+		const decorationsObs = this._decorations.map(d => {
+			console.log('[OriginalEditorInlineDiffView] MAP decorationsObs - d:', d ? `exists (original: ${d.originalDecorations?.length ?? 0}, modified: ${d.modifiedDecorations?.length ?? 0})` : 'undefined', 'caller:', new Error().stack?.split('\n')[2]?.trim());
+			return d?.originalDecorations ?? [];
+		});
+
+		// Explicitly observe _state to ensure decorationsObs recomputes when _state changes
+		// This autorun ensures that when _state changes, decorationsObs recomputes, which triggers setDecorations
+		// We read _state first to establish the dependency, then read decorationsObs to ensure it recomputes
+		this._register(autorun(reader => {
+			console.log('[OriginalEditorInlineDiffView] AUTORUN _state observer - START (observing)');
+			// Read _state directly to ensure we observe it - this is critical for the autorun to re-run
+			const state = this._state.read(reader);
+			console.log('[OriginalEditorInlineDiffView] AUTORUN _state observer - _state read:', state ? `exists (mode: ${state.mode})` : 'undefined');
+			// Read _decorations to ensure it recomputes when _state changes
+			const decorations = this._decorations.read(reader);
+			console.log('[OriginalEditorInlineDiffView] AUTORUN _state observer - _decorations read:', decorations ? `exists (original: ${decorations.originalDecorations?.length ?? 0}, modified: ${decorations.modifiedDecorations?.length ?? 0})` : 'undefined');
+			// Read decorationsObs to ensure it recomputes and triggers setDecorations autorun
+			const decorationsArray = decorationsObs.read(reader);
+			console.log('[OriginalEditorInlineDiffView] AUTORUN _state observer - decorationsObs read, count:', decorationsArray.length);
+		}));
+
+		console.log('[OriginalEditorInlineDiffView] CONSTRUCTOR - registering setDecorations with decorationsObs');
+		const setDecorationsResult = observableCodeEditor(this._originalEditor).setDecorations(decorationsObs);
+		console.log('[OriginalEditorInlineDiffView] CONSTRUCTOR - setDecorations returned:', setDecorationsResult ? 'disposable' : 'undefined');
+		this._register(setDecorationsResult);
 
 		const modifiedCodeEditor = this._state.map(s => s?.modifiedCodeEditor);
 		this._register(autorunWithStore((reader, store) => {
@@ -107,8 +135,13 @@ export class OriginalEditorInlineDiffView extends Disposable {
 	}
 
 	private readonly _decorations = derived(this, reader => {
+		console.log('[OriginalEditorInlineDiffView] _decorations DERIVED - START, caller:', new Error().stack?.split('\n')[2]?.trim());
 		const diff = this._state.read(reader);
-		if (!diff) { return undefined; }
+		console.log('[OriginalEditorInlineDiffView] _decorations DERIVED - _state read:', diff ? `exists (mode: ${diff.mode})` : 'undefined');
+		if (!diff) {
+			console.log('[OriginalEditorInlineDiffView] _decorations DERIVED - returning undefined');
+			return undefined;
+		}
 
 		const modified = diff.modifiedText;
 		const showInline = diff.mode === 'mixedLines';

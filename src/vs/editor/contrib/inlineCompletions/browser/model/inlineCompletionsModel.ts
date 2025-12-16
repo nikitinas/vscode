@@ -60,6 +60,7 @@ export class InlineCompletionsModel extends Disposable {
 	private readonly _suggestPreviewMode = this._editorObs.getOption(EditorOption.suggest).map(v => v.previewMode);
 	private readonly _inlineSuggestMode = this._editorObs.getOption(EditorOption.inlineSuggest).map(v => v.mode);
 	private readonly _inlineEditsEnabled = this._editorObs.getOption(EditorOption.inlineSuggest).map(v => !!v.edits.experimental?.enabled);
+	private readonly _inlineEditsShowCollapsedEnabled = this._editorObs.getOption(EditorOption.inlineSuggest).map(s => s.edits.showCollapsed);
 
 	constructor(
 		public readonly textModel: ITextModel,
@@ -95,6 +96,13 @@ export class InlineCompletionsModel extends Disposable {
 		this._register(autorun(reader => {
 			this._editorObs.versionId.read(reader);
 			this._inAcceptFlow.set(false, undefined);
+		}));
+
+		this._register(autorun(reader => {
+			const jumpToReset = this.state.map(s => !s || s.kind === 'inlineEdit' && !s.cursorAtInlineEdit).read(reader);
+			if (jumpToReset) {
+				this._jumpedToId.set(undefined, undefined);
+			}
 		}));
 
 
@@ -234,6 +242,7 @@ export class InlineCompletionsModel extends Disposable {
 	}
 
 	public stop(stopReason: 'explicitCancel' | 'automatic' = 'automatic', tx?: ITransaction): void {
+		console.log('[InlineCompletionsModel] stop() called, reason:', stopReason);
 		subtransaction(tx, tx => {
 			if (stopReason === 'explicitCancel') {
 				const completion = this.state.get()?.inlineCompletion?.inlineCompletion;
@@ -242,8 +251,10 @@ export class InlineCompletionsModel extends Disposable {
 				}
 			}
 
+			console.log('[InlineCompletionsModel] stop() - before clear, state:', this.state.get()?.kind, 'inlineEditState:', this.inlineEditState.get()?.kind);
 			this._isActive.set(false, tx);
 			this._source.clear(tx);
+			console.log('[InlineCompletionsModel] stop() - after clear, state:', this.state.get()?.kind, 'inlineEditState:', this.inlineEditState.get()?.kind);
 		});
 	}
 
@@ -257,6 +268,7 @@ export class InlineCompletionsModel extends Disposable {
 
 	private readonly _inlineCompletionItems = derivedOpts({ owner: this }, reader => {
 		const c = this._source.inlineCompletions.read(reader);
+		console.log('[InlineCompletionsModel] _inlineCompletionItems - source.inlineCompletions:', c ? 'exists' : 'undefined');
 		if (!c) { return undefined; }
 		const cursorPosition = this._primaryPosition.read(reader);
 		let inlineEdit: InlineCompletionWithUpdatedRange | undefined = undefined;
@@ -369,13 +381,13 @@ export class InlineCompletionsModel extends Disposable {
 			const currentItemIsCollapsed = !disableCollapsing && (cursorDist > 1 && this._collapsedInlineEditId.read(reader) === item.inlineEdit.semanticId);
 
 			const commands = item.inlineEdit.inlineCompletion.source.inlineCompletions.commands;
-			const renderExplicitly = this._jumpedTo.read(reader);
+			const renderExplicitly = this._jumpedToId.read(reader) === item.inlineEdit.semanticId;
 			const inlineEdit = new InlineEdit(edit, currentItemIsCollapsed, renderExplicitly, commands ?? [], item.inlineEdit.inlineCompletion);
 
 			return { kind: 'inlineEdit', inlineEdit, inlineCompletion: item.inlineEdit, edits: [edit], cursorAtInlineEdit };
 		}
 
-		this._jumpedTo.set(false, undefined);
+		this._jumpedToId.set(undefined, undefined);
 
 		const suggestItem = this._selectedSuggestItem.read(reader);
 		if (suggestItem) {
@@ -434,6 +446,7 @@ export class InlineCompletionsModel extends Disposable {
 
 	public readonly inlineEditState = derived(reader => {
 		const s = this.state.read(reader);
+		console.log('[InlineCompletionsModel] inlineEditState - state:', s?.kind, 'will return:', (!s || s.kind !== 'inlineEdit') ? 'undefined' : 'inlineEdit');
 		if (!s || s.kind !== 'inlineEdit') {
 			return undefined;
 		}
@@ -503,6 +516,17 @@ export class InlineCompletionsModel extends Disposable {
 		});
 	});
 
+	public readonly showCollapsed = derived<boolean>(this, reader => {
+		const state = this.inlineEditState.read(reader);
+		if (!state) {
+			return false;
+		}
+
+		return this._inlineEditsShowCollapsedEnabled.read(reader)
+			&& this._jumpedToId.read(reader) !== state.inlineCompletion.semanticId
+			&& !this._inAcceptFlow.read(reader);
+	});
+
 	public readonly tabShouldJumpToInlineEdit = derived(this, reader => {
 		if (this._tabShouldIndent.read(reader)) {
 			return false;
@@ -512,19 +536,28 @@ export class InlineCompletionsModel extends Disposable {
 		if (!s) {
 			return false;
 		}
+
+		if (this.showCollapsed.read(reader)) {
+			return true;
+		}
+
 		return !s.cursorAtInlineEdit;
 	});
 
 	public readonly tabShouldAcceptInlineEdit = derived(this, reader => {
-		if (this._jumpedTo.read(reader)) {
-			return true;
-		}
-		if (this._tabShouldIndent.read(reader)) {
+		const s = this.inlineEditState.read(reader);
+		if (!s) {
 			return false;
 		}
 
-		const s = this.inlineEditState.read(reader);
-		if (!s) {
+		if (this.showCollapsed.read(reader)) {
+			return false;
+		}
+
+		if (this._jumpedToId.read(reader) === s.inlineCompletion.semanticId) {
+			return true;
+		}
+		if (this._tabShouldIndent.read(reader)) {
 			return false;
 		}
 		return s.cursorAtInlineEdit;
@@ -733,7 +766,7 @@ export class InlineCompletionsModel extends Disposable {
 		};
 	}
 
-	private _jumpedTo = observableValue(this, false);
+	private readonly _jumpedToId = observableValue<undefined | string>(this, undefined);
 	private _inAcceptFlow = observableValue(this, false);
 
 	public jump(): void {
@@ -741,7 +774,7 @@ export class InlineCompletionsModel extends Disposable {
 		if (!s) { return; }
 
 		transaction(tx => {
-			this._jumpedTo.set(true, tx);
+			this._jumpedToId.set(s.inlineCompletion.semanticId, tx);
 			this.dontRefetchSignal.trigger(tx);
 			this._editor.setPosition(s.inlineEdit.range.getStartPosition(), 'inlineCompletions.jump');
 			this._editor.revealLine(s.inlineEdit.range.startLineNumber);

@@ -49,8 +49,7 @@ export class InlineEditModel implements IInlineEditModel {
 			inlineEdit.inlineCompletion
 		);
 
-		// Create a simple showCollapsed observable - adapt based on your backport's structure
-		this.showCollapsed = observableValue(this, false);
+		this.showCollapsed = this._model.showCollapsed;
 	}
 
 	accept() {

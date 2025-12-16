@@ -20,6 +20,8 @@ import { IContextKeyService } from '../../../../../../../platform/contextkey/com
 import { nativeHoverDelegate } from '../../../../../../../platform/hover/browser/hover.js';
 import { IKeybindingService } from '../../../../../../../platform/keybinding/common/keybinding.js';
 import { asCssVariable, descriptionForeground, editorActionListForeground, editorHoverBorder } from '../../../../../../../platform/theme/common/colorRegistry.js';
+import { EditorOption } from '../../../../../../common/config/editorOptions.js';
+import { ObservableCodeEditor } from '../../../../../../browser/observableCodeEditor.js';
 import { hideInlineCompletionId, inlineSuggestCommitId, jumpToNextInlineEditId, toggleShowCollapsedId } from '../../../controller/commandIds.js';
 import { IInlineEditModel, InlineEditTabAction } from '../inlineEditsViewInterface.js';
 import { FirstFnArg } from '../utils.js';
@@ -31,11 +33,12 @@ export class GutterIndicatorMenuContent {
 	constructor(
 		private readonly _model: IInlineEditModel,
 		private readonly _close: (focusEditor: boolean) => void,
+		private readonly _editorObs: ObservableCodeEditor,
 		@IContextKeyService private readonly _contextKeyService: IContextKeyService,
 		@IKeybindingService private readonly _keybindingService: IKeybindingService,
 		@ICommandService private readonly _commandService: ICommandService,
 	) {
-		this._inlineEditsShowCollapsed = constObservable(false); // Not available in backport
+		this._inlineEditsShowCollapsed = this._editorObs.getOption(EditorOption.inlineSuggest).map(s => s.edits.showCollapsed);
 	}
 
 	public toDisposableLiveElement(): LiveElement {

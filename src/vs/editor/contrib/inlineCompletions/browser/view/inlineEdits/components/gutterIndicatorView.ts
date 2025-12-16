@@ -418,6 +418,7 @@ export class InlineEditsGutterIndicator extends Disposable {
 				}
 				h?.dispose();
 			},
+			this._editorObs,
 		).toDisposableLiveElement());
 
 		const focusTracker = disposableStore.add(trackFocus(content.element));

@@ -25,6 +25,7 @@ import { InlineEditsGutterIndicator } from './components/gutterIndicatorView.js'
 import { InlineEditHost, InlineEditModel } from './inlineEditsModel.js';
 import { InlineEditTabAction } from './inlineEditsViewInterface.js';
 import { InlineEditsWordReplacementView } from './inlineEditsViews/inlineEditsWordReplacementView.js';
+import { InlineEditsCollapsedView } from './inlineEditsViews/inlineEditsCollapsedView.js';
 import { TextLength } from '../../../../../common/core/textLength.js';
 import { InlineEdit } from '../../model/inlineEdit.js';
 import { darken, lighten, registerColor, transparent } from '../../../../../../platform/theme/common/colorUtils.js';
@@ -123,6 +124,7 @@ export class InlineEditsView extends Disposable {
 		@ICommandService private readonly _commandService: ICommandService,
 	) {
 		super();
+		console.log('[InlineEditsView] CONSTRUCTOR - START (view being created)');
 
 		this._register(appendRemoveOnDispose(this._editor.getDomNode()!, this._elements.root));
 
@@ -142,8 +144,11 @@ export class InlineEditsView extends Disposable {
 
 		this._register(autorun(reader => {
 			const layoutInfo = this._previewEditorLayoutInfo.read(reader);
+			console.log('[InlineEditsView] autorun layoutInfo - layoutInfo:', layoutInfo ? 'exists' : 'null');
 			if (!layoutInfo) {
+				console.log('[InlineEditsView] autorun layoutInfo - clearing SVG elements');
 				this._elements.svg.replaceChildren();
+				this._elements.svg2.replaceChildren();
 				return;
 			}
 
@@ -264,13 +269,41 @@ export class InlineEditsView extends Disposable {
 
 		// Keep indicator observed
 		this._indicator.recomputeInitiallyAndOnChange(this._store);
+
+		// Keep _inlineDiffViewState observed so it recomputes when _uiState changes
+		// This ensures that when _uiState becomes undefined, _inlineDiffViewState also becomes undefined,
+		// which causes _decorations to recompute and clear the decorations
+		// NOTE: We register this in the constructor AFTER _inlineDiffView is created (which happens as a class property)
+		// IMPORTANT: Read _edit directly since _uiState depends on it, and read _inlineDiffViewState to ensure it recomputes
+		console.log('[InlineEditsView] CONSTRUCTOR - registering autorun for _inlineDiffViewState');
+		this._register(autorun(reader => {
+			console.log('[InlineEditsView] AUTORUN _inlineDiffViewState - START (running)');
+			try {
+				// Read _edit directly to ensure we observe the root dependency
+				const edit = this._edit.read(reader);
+				console.log('[InlineEditsView] AUTORUN _inlineDiffViewState - _edit:', edit ? 'exists' : 'undefined');
+				// Read _uiState to ensure it recomputes
+				const uiState = this._uiState.read(reader);
+				console.log('[InlineEditsView] AUTORUN _inlineDiffViewState - _uiState:', uiState ? `exists (state: ${uiState.state})` : 'undefined');
+				// Read _inlineDiffViewState to ensure it recomputes
+				const state = this._inlineDiffViewState.read(reader);
+				console.log('[InlineEditsView] AUTORUN _inlineDiffViewState - read state:', state ? `exists (mode: ${state.mode})` : 'undefined');
+			} catch (e) {
+				console.error('[InlineEditsView] AUTORUN _inlineDiffViewState - ERROR:', e);
+			}
+		}));
+		console.log('[InlineEditsView] CONSTRUCTOR - autorun registered');
 	}
 
 	private readonly _uiState = derived(this, reader => {
 		const edit = this._edit.read(reader);
+		console.log('[InlineEditsView] _uiState - _edit:', edit ? 'exists' : 'undefined');
 		if (!edit) { return undefined; }
 
-		this._model.get()?.handleInlineCompletionShown(edit.inlineCompletion);
+		const model = this._model.read(reader);
+		if (!model) { return undefined; }
+
+		model.handleInlineCompletionShown(edit.inlineCompletion);
 
 		let mappings = RangeMapping.fromEdit(edit.edit);
 		let newText = edit.edit.apply(edit.originalText);
@@ -286,9 +319,7 @@ export class InlineEditsView extends Disposable {
 			&& TextLength.ofRange(inner[0].modifiedRange).columnCount < InlineEditsWordReplacementView.MAX_LENGTH;
 
 		let state: 'collapsed' | 'mixedLines' | 'interleavedLines' | 'sideBySide' | 'wordReplacements';
-		if (edit.isCollapsed) {
-			state = 'collapsed';
-		} else if (isWordReplacement) {
+		if (isWordReplacement) {
 			state = 'wordReplacements';
 		} else {
 			// Use allowHorizontalCodeShifting and allowVerticalCodeShifting settings to determine the diff presentation mode
@@ -334,6 +365,11 @@ export class InlineEditsView extends Disposable {
 				return new SingleTextEdit(m.originalRange, newTextObj.getValueOfRange(m.modifiedRange));
 			})
 			: undefined;
+
+		// Check if model.showCollapsed is enabled and indicator is not hovered
+		if (model.showCollapsed.read(reader) && !this._indicator.read(reader)?.isHoverVisible.read(reader)) {
+			state = 'collapsed';
+		}
 
 		return {
 			state,
@@ -491,10 +527,12 @@ export class InlineEditsView extends Disposable {
 	private readonly _previewEditorLayoutInfo = derived(this, (reader) => {
 		const inlineEdit = this._edit.read(reader);
 		if (!inlineEdit) {
+			console.log('[InlineEditsView] _previewEditorLayoutInfo - inlineEdit is undefined, returning null');
 			return null;
 		}
 		const state = this._uiState.read(reader);
 		if (!state) {
+			console.log('[InlineEditsView] _previewEditorLayoutInfo - state is undefined, returning null');
 			return null;
 		}
 
@@ -566,18 +604,32 @@ export class InlineEditsView extends Disposable {
 	// #endregion
 
 	private readonly _inlineDiffViewState = derived<IOriginalEditorInlineDiffViewState | undefined>(this, reader => {
+		console.log('[InlineEditsView] _inlineDiffViewState DERIVED - START, caller:', new Error().stack?.split('\n')[2]?.trim());
 		const e = this._uiState.read(reader);
-		if (!e) { return undefined; }
-		if (e.state === 'wordReplacements') { return undefined; } // Don't use inline diff view for word replacements
+		console.log('[InlineEditsView] _inlineDiffViewState DERIVED - _uiState:', e ? `exists (state: ${e.state})` : 'undefined');
+		if (!e) {
+			console.log('[InlineEditsView] _inlineDiffViewState DERIVED - returning undefined');
+			return undefined;
+		}
+		if (e.state === 'wordReplacements' || e.state === 'collapsed') {
+			console.log('[InlineEditsView] _inlineDiffViewState DERIVED - state is wordReplacements/collapsed, returning undefined');
+			return undefined;
+		} // Don't use inline diff view for word replacements or collapsed state
 
 		return {
 			modifiedText: new StringText(e.newText),
 			diff: e.diff,
-			mode: e.state === 'collapsed' ? 'sideBySide' : e.state,
+			mode: e.state,
 			modifiedCodeEditor: this._previewEditor,
 		};
 	});
 	protected readonly _inlineDiffView = this._register(new OriginalEditorInlineDiffView(this._editor, this._inlineDiffViewState, this._previewTextModel));
+
+
+	protected readonly _inlineCollapsedView = this._register(this._instantiationService.createInstance(InlineEditsCollapsedView,
+		this._editor,
+		this._edit.map((edit, reader) => this._uiState.read(reader)?.state === 'collapsed' ? edit : undefined)
+	));
 
 	private readonly _tabAction = derived(this, reader => {
 		if (this._editorObs.isFocused.read(reader)) {
