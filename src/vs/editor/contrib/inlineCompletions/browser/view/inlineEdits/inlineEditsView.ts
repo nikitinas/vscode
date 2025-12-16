@@ -298,9 +298,13 @@ export class InlineEditsView extends Disposable {
 			// Check if all diffs support inline rendering (mixedLines mode)
 			const supportsMixedLines = diff.every(m => OriginalEditorInlineDiffView.supportsInlineDiffRendering(m));
 
+			// Check if all modified ranges are empty (only deletions, no insertions)
+			const allModifiedEmpty = diff.every(m => m.modified.isEmpty);
+
 			if (!allowHorizontal && !allowVertical) {
-				// When both code shifting options are disabled, always use side-by-side
-				state = 'sideBySide';
+				// When both code shifting options are disabled, use interleavedLines if only deletions,
+				// otherwise use side-by-side
+				state = allModifiedEmpty ? 'interleavedLines' : 'sideBySide';
 			} else if (allowHorizontal && supportsMixedLines) {
 				// When horizontal code shifting is enabled and diff supports it, use mixedLines
 				state = 'mixedLines';
@@ -309,8 +313,8 @@ export class InlineEditsView extends Disposable {
 				state = 'interleavedLines';
 			} else {
 				// Fallback: horizontal is enabled but diff doesn't support mixedLines, or only horizontal is enabled
-				// Use side-by-side
-				state = 'sideBySide';
+				// Use interleavedLines if only deletions, otherwise side-by-side
+				state = allModifiedEmpty ? 'interleavedLines' : 'sideBySide';
 			}
 		}
 
