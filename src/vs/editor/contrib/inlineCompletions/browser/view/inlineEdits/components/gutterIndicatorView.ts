@@ -336,41 +336,42 @@ export class InlineEditsGutterIndicator extends Disposable {
 
 		// The glyph margin area across all relevant lines
 		const targetVertRange = s.lineOffsetRange.read(reader);
-		const targetRect = Rect.fromRanges(OffsetRange.fromTo(leftPadding + layout.glyphMarginLeft, layout.decorationsLeft + layout.decorationsWidth - rightPadding), targetVertRange);
 
-		// The gutter view container (pill)
+		// rect: Rectangle representing the glyph margin area for the affected lines,
+		// spanning horizontally from the start of the glyph margin to the end of the decorations margin,
+		// and vertically covering the range `targetVertRange`.
+		const rect = Rect.fromRanges(OffsetRange.fromTo(leftPadding + layout.glyphMarginLeft, layout.decorationsLeft + layout.decorationsWidth - rightPadding), targetVertRange);
+
+		// pillOffset: The vertical offset for the pill (gutter view container) from the top of the target line.
 		const pillOffset = this._verticalOffset.read(reader);
-		let pillRect = targetRect.withHeight(lineHeight).withWidth(22).translateY(pillOffset);
-		const pillRectMoved = pillRect.moveToBeContainedIn(viewPortWithStickyScroll);
 
-		const rect = targetRect;
+		// initialPillRect: The initial position/size for the pill (gutter view container) at the offset for the target line.
+		const initialPillRect = rect.withHeight(lineHeight).withWidth(22).translateY(pillOffset);
 
-		// Move pill to be in viewport if it is not
-		pillRect = (targetRect.containsRect(pillRectMoved))
-			? pillRectMoved
-			: pillRectMoved.moveToBeContainedIn(fullViewPort.intersect(targetRect.union(fullViewPort.withHeight(lineHeight)))!);
+		// pillRect: The final position/size for the pill (gutter view container) at the offset for the target line.
+		let pillRect = initialPillRect.moveToBeContainedIn(viewPortWithStickyScroll);
 
-		// docked = pill was already in the viewport
-		const docked = rect.containsRect(pillRect) && viewPortWithStickyScroll.containsRect(pillRect);
-		let iconDirecion = targetRect.containsRect(pillRect) ?
+		// docked = pill is already in the viewport
+		const docked = initialPillRect.top === pillRect.top;
+
+		let iconDirecion = docked ?
 			'right' as const
-			: pillRect.top > targetRect.top ?
+			: pillRect.top > initialPillRect.top ?
 				'top' as const :
 				'bottom' as const;
 
 		// Grow icon the the whole glyph margin area if it is docked
+		// For insertions, we check the position BEFORE movement since the pill may be moved back inside targetRect
 		let lineNumberRect = pillRect.withWidth(0);
 		let iconRect = pillRect;
-		if (docked && pillRect.top === targetRect.top + pillOffset) {
+		if (docked) {
 			pillRect = pillRect.withWidth(layout.decorationsLeft + layout.decorationsWidth - layout.glyphMarginLeft - leftPadding - rightPadding);
 			lineNumberRect = pillRect.intersectHorizontal(new OffsetRange(0, Math.max(layout.lineNumbersLeft + layout.lineNumbersWidth - leftPadding - 1, 0)));
 			iconRect = iconRect.translateX(lineNumberRect.width);
 		}
 
 		let icon;
-		const isHoveredIcon = this._isHoveredOverIconDebounced.read(reader) ?? false;
-		const isHoveredInlineEdit = this._isHoveredOverInlineEditDebounced.read(reader) ?? false;
-		if (docked && (isHoveredIcon || isHoveredInlineEdit)) {
+		if (docked && (this._isHoveredOverIconDebounced.read(reader) || this._isHoveredOverInlineEditDebounced.read(reader))) {
 			icon = renderIcon(Codicon.check);
 			iconDirecion = 'right';
 		} else {

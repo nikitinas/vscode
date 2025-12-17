@@ -643,14 +643,45 @@ export class InlineEditsView extends Disposable {
 		const originalRange = derived(this, reader => {
 			const e = this._edit.read(reader);
 			if (!e) { return undefined; }
+			// When only insertions occur (original is empty), use the line before the view zone
+			// In 1.99, originalLines uses s.lineNumber which may be adjusted to lineNumber - 1 in some cases
+			// The view zone is inserted after startLineNumber - 1, so we use that line for the range
+			if (e.originalLineRange.length === 0 && e.modifiedLineRange.length > 0) {
+				// Use startLineNumber - 1 (the line before the view zone) - matches 1.99's adjusted s.lineNumber
+				return LineRange.ofLength(e.originalLineRange.startLineNumber - 1, 1);
+			}
 			return e.originalLineRange;
+		});
+
+		// Calculate vertical offset for insertions (similar to startLineOffset in 1.99)
+		// In 1.99, startLineOffset = topOffset from trimVertically, which accounts for leading newlines
+		// For our backport, we position at the first inserted line in the view zone
+		// Only apply verticalOffset in interleavedLines mode - in sideBySide mode, no offset is needed
+		const verticalOffset = derived(this, reader => {
+			const e = this._edit.read(reader);
+			if (!e) { return 0; }
+
+			// Check if we're in interleavedLines mode
+			const uiState = this._uiState.read(reader);
+			const isInterleavedMode = uiState?.state === 'interleavedLines';
+
+			if (e.originalLineRange.length === 0 && e.modifiedLineRange.length > 0 && isInterleavedMode) {
+				// The view zone is inserted after startLineNumber - 1
+				// We're using startLineNumber - 1 for the range, so targetRect spans that line
+				// targetRect.top = getTopForLineNumber(startLineNumber - 1) - scrollTop
+				// targetRect.bottom = getBottomForLineNumber(startLineNumber - 1) - scrollTop
+				// The first inserted line is at targetRect.bottom (where view zone starts)
+				// pillRect.top starts at targetRect.top, so we need verticalOffset = lineHeight to position at targetRect.bottom
+				return this._editorObs.getOption(EditorOption.lineHeight).read(reader);
+			}
+			return 0;
 		});
 
 		return store.add(this._instantiationService.createInstance(
 			InlineEditsGutterIndicator,
 			this._editorObs,
 			originalRange,
-			constObservable(0), // verticalOffset
+			verticalOffset,
 			constObservable(host),
 			constObservable(model),
 			this._isHoveringOverInlineEdit,
