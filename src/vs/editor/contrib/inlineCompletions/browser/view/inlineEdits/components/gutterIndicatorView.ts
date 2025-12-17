@@ -370,12 +370,32 @@ export class InlineEditsGutterIndicator extends Disposable {
 			iconRect = iconRect.translateX(lineNumberRect.width);
 		}
 
+		// Icon logic matching 1.107: show different icons based on state
+		const tabAction = this._tabAction.read(reader);
+		console.log('[GutterIndicatorView] tabAction:', tabAction);
+		const isHovered = this._isHoveredOverIconDebounced.read(reader) || this._isHoveredOverInlineEditDebounced.read(reader);
 		let icon;
-		if (docked && (this._isHoveredOverIconDebounced.read(reader) || this._isHoveredOverInlineEditDebounced.read(reader))) {
+
+		if (docked && isHovered) {
 			icon = renderIcon(Codicon.check);
 			iconDirecion = 'right';
+		} else if (docked) {
+			// When docked, show tab action icon
+			if (tabAction === InlineEditTabAction.Accept) {
+				icon = renderIcon(Codicon.keyboardTab);
+			} else {
+				// For jump, show broken arrow (keyboardTabAbove/keyboardTabBelow) based on cursor position
+				// Read cursor position to determine icon direction
+				const cursorLineNumber = this._editorObs.cursorLineNumber.read(reader) ?? 0;
+				const editStartLineNumber = s.range.read(reader).startLineNumber;
+				const jumpIcon = cursorLineNumber <= editStartLineNumber
+					? Codicon.keyboardTabAbove
+					: Codicon.keyboardTabBelow;
+				icon = renderIcon(jumpIcon);
+			}
 		} else {
-			icon = this._tabAction.read(reader) === InlineEditTabAction.Accept ? renderIcon(Codicon.keyboard) : renderIcon(Codicon.arrowRight);
+			// When not docked, show simple icon
+			icon = tabAction === InlineEditTabAction.Accept ? renderIcon(Codicon.keyboardTab) : renderIcon(Codicon.arrowRight);
 		}
 
 		let rotation = 0;

@@ -584,11 +584,35 @@ export class InlineEditsView extends Disposable {
 	protected readonly _inlineDiffView = this._register(new OriginalEditorInlineDiffView(this._editor, this._inlineDiffViewState, this._previewTextModel));
 
 	private readonly _tabAction = derived(this, reader => {
-		if (this._editorObs.isFocused.read(reader)) {
-			// TODO: Check if tab should jump or accept
-			return InlineEditTabAction.Jump;
+		if (!this._editorObs.isFocused.read(reader)) {
+			return InlineEditTabAction.Inactive;
 		}
-		return InlineEditTabAction.Inactive;
+
+		const model = this._model.read(reader);
+		if (!model) {
+			return InlineEditTabAction.Inactive;
+		}
+
+		const inlineEditState = model.inlineEditState.read(reader);
+		if (!inlineEditState) {
+			return InlineEditTabAction.Inactive;
+		}
+
+		// For indicator display, check cursorAtInlineEdit directly
+		// This ensures the indicator updates even when _tabShouldIndent is true (empty lines)
+		// Also check if tab should accept (which includes the jumpedTo check)
+		if (model.tabShouldAcceptInlineEdit.read(reader)) {
+			return InlineEditTabAction.Accept;
+		}
+
+		// If cursor is at inline edit but tabShouldAcceptInlineEdit is false (due to indent),
+		// still show Accept state for the indicator
+		if (inlineEditState.cursorAtInlineEdit) {
+			return InlineEditTabAction.Accept;
+		}
+
+		// Cursor is not at inline edit, so tab should jump
+		return InlineEditTabAction.Jump;
 	});
 
 	protected readonly _wordReplacementViews = mapObservableArrayCached(this, this._uiState.map(s => s?.state === 'wordReplacements' && s.replacements ? s.replacements : []), (edit, store) => {
@@ -661,11 +685,7 @@ export class InlineEditsView extends Disposable {
 			const e = this._edit.read(reader);
 			if (!e) { return 0; }
 
-			// Check if we're in interleavedLines mode
-			const uiState = this._uiState.read(reader);
-			const isInterleavedMode = uiState?.state === 'interleavedLines';
-
-			if (e.originalLineRange.length === 0 && e.modifiedLineRange.length > 0 && isInterleavedMode) {
+			if (e.originalLineRange.length === 0 && e.modifiedLineRange.length > 0) {
 				// The view zone is inserted after startLineNumber - 1
 				// We're using startLineNumber - 1 for the range, so targetRect spans that line
 				// targetRect.top = getTopForLineNumber(startLineNumber - 1) - scrollTop

@@ -435,8 +435,18 @@ export class InlineCompletionsModel extends Disposable {
 	public readonly inlineEditState = derived(reader => {
 		const s = this.state.read(reader);
 		if (!s || s.kind !== 'inlineEdit') {
+			// Reset _jumpedTo when there's no inline edit state
+			if (this._jumpedTo.get()) {
+				this._jumpedTo.set(false, undefined);
+			}
 			return undefined;
 		}
+
+		// Reset _jumpedTo when cursor moves away from the inline edit
+		if (this._jumpedTo.get() && !s.cursorAtInlineEdit) {
+			this._jumpedTo.set(false, undefined);
+		}
+
 		return s;
 	});
 
