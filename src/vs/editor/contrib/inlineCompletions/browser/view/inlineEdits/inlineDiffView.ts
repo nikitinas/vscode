@@ -188,6 +188,10 @@ export class OriginalEditorInlineDiffView extends Disposable {
 				const spaceWidth = renderOptions.fontInfo.spaceWidth;
 
 				const isModifiedEmpty = diff.modified.isEmpty || (diff.innerChanges && diff.innerChanges.length > 0 && diff.innerChanges.every(inner => inner.modifiedRange.isEmpty()));
+				const isOriginalEmpty = diff.original.isEmpty || (diff.innerChanges && diff.innerChanges.length > 0 && diff.innerChanges.every(inner => inner.originalRange.isEmpty()));
+				if (isOriginalEmpty || isModifiedEmpty) {
+					continue;
+				}
 				// Calculate content bounds for original lines
 				const originalBounds = !diff.original.isEmpty && originalModel
 					? findContentBounds(originalModel, originalRange)
@@ -224,8 +228,7 @@ export class OriginalEditorInlineDiffView extends Disposable {
 					leftEdge = contentLeft - scrollLeft;
 					rightEdge = contentLeft + contentWidth - scrollLeft;
 				}
-
-				if (!diff.original.isEmpty) {
+				if (!isOriginalEmpty) {
 					// Calculate positions for all original lines (deleted) - single path around entire block
 					const originalFirstLineTop = this._originalEditor.getTopForLineNumber(originalRange.startLineNumber) - scrollTop;
 					const originalLastLineTop = this._originalEditor.getTopForLineNumber(originalRange.endLineNumber) - scrollTop;
