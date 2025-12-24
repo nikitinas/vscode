@@ -20,11 +20,209 @@ import { TextLength } from '../../../../../common/core/textLength.js';
 import { Command } from '../../../../../common/languages.js';
 import { TextModelText } from '../../../../../common/model/textModelText.js';
 import { IModelService } from '../../../../../common/services/model.js';
+import { ITextModel } from '../../../../../common/model.js';
+import { RangeMapping } from '../../../../../common/diff/rangeMapping.js';
 import { InlineCompletionsModel } from '../../model/inlineCompletionsModel.js';
 import { InlineEdit } from '../../model/inlineEdit.js';
 import { InlineCompletionItem } from '../../model/provideInlineCompletions.js';
 import { InlineEditsView } from './inlineEditsView.js';
 import { UniqueUriGenerator } from './utils.js';
+import { CharCode } from '../../../../../../base/common/charCode.js';
+
+/**
+ * Checks if a character code represents a word character (alphanumeric)
+ */
+function isWordChar(charCode: number): boolean {
+	return (charCode >= CharCode.a && charCode <= CharCode.z)
+		|| (charCode >= CharCode.A && charCode <= CharCode.Z)
+		|| (charCode >= CharCode.Digit0 && charCode <= CharCode.Digit9);
+}
+
+/**
+ * Finds the word containing the given position in the text.
+ * Returns the start and end offsets (0-based) of the word, or undefined if not in a word.
+ */
+function findWordContaining(text: string, position: number): { start: number; end: number } | undefined {
+	if (position < 0 || position >= text.length) {
+		return undefined;
+	}
+
+	if (!isWordChar(text.charCodeAt(position))) {
+		return undefined;
+	}
+
+	// Find start
+	let start = position;
+	while (start > 0 && isWordChar(text.charCodeAt(start - 1))) {
+		start--;
+	}
+
+	// Find end
+	let end = position;
+	while (end < text.length && isWordChar(text.charCodeAt(end))) {
+		end++;
+	}
+
+	return { start, end };
+}
+
+/**
+ * Merges inner changes that together form word replacements by extending boundaries to word boundaries.
+ * For example, if "text" is replaced with "text1", the diff might show an insertion at the end.
+ * This function extends it to include the full word: "text" -> "text1"
+ */
+function mergeWordReplacements(
+	innerChanges: RangeMapping[],
+	originalModel: ITextModel,
+	modifiedModel: ITextModel
+): RangeMapping[] {
+	if (innerChanges.length === 0) {
+		return innerChanges;
+	}
+
+	// Step 1: Check if all changes are in the same line
+	const firstLine = innerChanges[0].originalRange.startLineNumber;
+	if (!innerChanges.every(c => c.originalRange.startLineNumber === firstLine)) {
+		return innerChanges;
+	}
+
+	const originalLineContent = originalModel.getLineContent(firstLine);
+
+	// Step 2: For each inner change, extend its boundaries in original text to word boundaries
+	const extendedChanges: Array<{ originalWordStart: number; originalWordEnd: number; change: RangeMapping }> = [];
+
+	for (const change of innerChanges) {
+		// Find the word boundaries for this change in the original text
+		let wordStart: number | undefined;
+		let wordEnd: number | undefined;
+
+		if (!change.originalRange.isEmpty()) {
+			// Change has content - find word containing the start and end
+			const startOffset = change.originalRange.startColumn - 1;
+			const endOffset = change.originalRange.endColumn - 1;
+
+			if (startOffset >= 0 && endOffset <= originalLineContent.length) {
+				const startWord = findWordContaining(originalLineContent, startOffset);
+				const endWord = endOffset > 0 ? findWordContaining(originalLineContent, endOffset - 1) : startWord;
+
+				if (startWord && endWord) {
+					wordStart = startWord.start;
+					wordEnd = endWord.end;
+				}
+			}
+		} else {
+			// Empty original range (insertion) - find word at insertion point
+			const insertOffset = change.originalRange.startColumn - 1;
+			if (insertOffset > 0 && insertOffset <= originalLineContent.length) {
+				const charBefore = originalLineContent.charCodeAt(insertOffset - 1);
+				if (isWordChar(charBefore)) {
+					// Insertion is after a word character - find the word containing it
+					const word = findWordContaining(originalLineContent, insertOffset - 1);
+					if (word) {
+						// Extend to include the full word (works for both middle and end insertions)
+						wordStart = word.start;
+						wordEnd = word.end;
+					}
+				} else if (insertOffset < originalLineContent.length) {
+					// Check if insertion is before a word character (insertion in the middle)
+					const charAfter = originalLineContent.charCodeAt(insertOffset);
+					if (isWordChar(charAfter)) {
+						const word = findWordContaining(originalLineContent, insertOffset);
+						if (word) {
+							wordStart = word.start;
+							wordEnd = word.end;
+						}
+					}
+				}
+			}
+		}
+
+		if (wordStart !== undefined && wordEnd !== undefined) {
+			extendedChanges.push({ originalWordStart: wordStart, originalWordEnd: wordEnd, change });
+		} else {
+			// Can't extend this change to word boundaries, abort
+			return innerChanges;
+		}
+	}
+
+	// Step 3: Check if all extended changes produce the same word boundaries
+	if (extendedChanges.length === 0) {
+		return innerChanges;
+	}
+
+	const firstWordStart = extendedChanges[0].originalWordStart;
+	const firstWordEnd = extendedChanges[0].originalWordEnd;
+
+	if (!extendedChanges.every(ec => ec.originalWordStart === firstWordStart && ec.originalWordEnd === firstWordEnd)) {
+		// Not all changes extend to the same word boundaries
+		return innerChanges;
+	}
+
+	// Step 4: All changes extend to the same word - merge them into a single word replacement
+	// For the modified text, we need to properly map the original word boundaries to modified text
+	const firstChange = extendedChanges[0].change;
+	const modifiedLineContent = modifiedModel.getLineContent(firstChange.modifiedRange.startLineNumber);
+
+	// Calculate the modified text range by tracking cumulative offset changes
+	// Start with the original word boundaries
+	let modifiedStart = firstWordStart;
+	let modifiedEnd = firstWordEnd;
+
+	// Apply each change to calculate the net effect on positions
+	// Sort changes by original position to apply them in order
+	const sortedChanges = [...extendedChanges].sort((a, b) =>
+		a.change.originalRange.startColumn - b.change.originalRange.startColumn
+	);
+
+	let cumulativeOffset = 0;
+	for (const { change } of sortedChanges) {
+		const originalStart = change.originalRange.startColumn - 1;
+		const originalEnd = change.originalRange.endColumn - 1;
+		const modifiedStart = change.modifiedRange.startColumn - 1;
+		const modifiedEnd = change.modifiedRange.endColumn - 1;
+
+		const originalLength = originalEnd - originalStart;
+		const modifiedLength = modifiedEnd - modifiedStart;
+		const deltaLength = modifiedLength - originalLength;
+
+		// Accumulate the offset for positions after this change
+		cumulativeOffset += deltaLength;
+	}
+
+	// Apply the cumulative offset to the word end
+	modifiedStart = firstWordStart;
+	modifiedEnd = firstWordEnd + cumulativeOffset;
+
+	// Ensure we don't go beyond the line bounds
+	modifiedStart = Math.max(0, modifiedStart);
+	modifiedEnd = Math.min(modifiedEnd, modifiedLineContent.length);
+
+	// Extract the actual text to validate this is a real replacement
+	const originalWordText = originalLineContent.substring(firstWordStart, firstWordEnd);
+	const modifiedText = modifiedLineContent.substring(modifiedStart, modifiedEnd);
+
+	// Don't merge if:
+	// 1. The texts are identical (no actual change)
+	// 2. Either text is empty (deletion or pure insertion, not replacement)
+	if (originalWordText === modifiedText || originalWordText.length === 0 || modifiedText.length === 0) {
+		return innerChanges;
+	}
+
+	return [new RangeMapping(
+		new Range(
+			firstLine,
+			firstWordStart + 1,
+			firstLine,
+			firstWordEnd + 1
+		),
+		new Range(
+			firstChange.modifiedRange.startLineNumber,
+			modifiedStart + 1,
+			firstChange.modifiedRange.startLineNumber,
+			modifiedEnd + 1
+		)
+	)];
+}
 
 export class InlineEditsViewAndDiffProducer extends Disposable {
 	public static readonly hot = createHotClass(InlineEditsViewAndDiffProducer);
@@ -69,7 +267,10 @@ export class InlineEditsViewAndDiffProducer extends Disposable {
 			const result = p.data;
 
 			const rangeStartPos = edit.range.getStartPosition();
-			const innerChanges = result.changes.flatMap(c => c.innerChanges!);
+			let innerChanges = result.changes.flatMap(c => c.innerChanges!);
+
+			// Merge word replacements to improve detection of single word replacement cases
+			innerChanges = mergeWordReplacements(innerChanges, this._originalModel.get()!, this._modifiedModel.get()!);
 
 			function addRangeToPos(pos: Position, range: Range): Range {
 				const start = TextLength.fromPosition(range.getStartPosition());

@@ -314,7 +314,8 @@ export class InlineEditsView extends Disposable {
 			});
 
 			if (allModifiedEmpty) {
-				state = 'interleavedLines';
+				// Only deletions, no insertions
+				state = 'mixedLines';
 			} else if (allowHorizontal && supportsMixedLines) {
 				// When horizontal code shifting is enabled and diff supports it, use mixedLines
 				state = 'mixedLines';
