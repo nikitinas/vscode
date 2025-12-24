@@ -45,6 +45,9 @@ export class InlineCompletionsModel extends Disposable {
 	private readonly _onlyRequestInlineEditsSignal = observableSignal(this);
 	private readonly _forceUpdateExplicitlySignal = observableSignal(this);
 
+	// Workaround: Track last rejected completion to prevent re-showing the same suggestion
+	private _lastRejectedCompletionId: string | undefined = undefined;
+
 	// We use a semantic id to keep the same inline completion selected even if the provider reorders the completions.
 	private readonly _selectedInlineCompletionId = observableValue<string | undefined>(this, undefined);
 	private readonly _primaryPosition = derived(this, reader => this._positions.read(reader)[0] ?? new Position(1, 1));
@@ -207,7 +210,9 @@ export class InlineCompletionsModel extends Disposable {
 			includeInlineEdits: this._inlineEditsEnabled.read(reader),
 		};
 		const itemToPreserveCandidate = this.selectedInlineCompletion.get();
-		const itemToPreserve = changeSummary.preserveCurrentCompletion || itemToPreserveCandidate?.forwardStable
+		// Workaround: Don't preserve a suggestion that was rejected
+		const wasRejected = itemToPreserveCandidate?.semanticId === this._lastRejectedCompletionId;
+		const itemToPreserve = (changeSummary.preserveCurrentCompletion || itemToPreserveCandidate?.forwardStable) && !wasRejected
 			? itemToPreserveCandidate : undefined;
 		return this._source.fetch(cursorPosition, context, itemToPreserve);
 	});
@@ -240,6 +245,13 @@ export class InlineCompletionsModel extends Disposable {
 				if (completion && completion.source.provider.handleRejection) {
 					completion.source.provider.handleRejection(completion.source.inlineCompletions, completion.sourceInlineCompletion);
 				}
+				// Workaround: Track rejected suggestion to prevent re-showing it
+				const selectedCompletion = this.selectedInlineCompletion.get();
+				if (selectedCompletion) {
+					this._lastRejectedCompletionId = selectedCompletion.semanticId;
+				}
+				// Clear the selection so rejected suggestion won't be preserved
+				this._selectedInlineCompletionId.set(undefined, tx);
 			}
 
 			this._isActive.set(false, tx);
