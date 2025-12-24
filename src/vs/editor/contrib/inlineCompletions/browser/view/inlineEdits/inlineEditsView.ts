@@ -299,12 +299,22 @@ export class InlineEditsView extends Disposable {
 			const supportsMixedLines = diff.every(m => OriginalEditorInlineDiffView.supportsInlineDiffRendering(m));
 
 			// Check if all modified ranges are empty (only deletions, no insertions)
-			const allModifiedEmpty = diff.every(m => m.modified.isEmpty);
+			// This includes both full line deletions and partial line deletions (inner edits)
+			const allModifiedEmpty = diff.every(m => {
+				// Check if the entire modified range is empty (full line deletion)
+				if (m.modified.isEmpty) {
+					return true;
+				}
+				// Check if all inner changes are deletions (partial line deletions)
+				if (m.innerChanges && m.innerChanges.length > 0) {
+					return m.innerChanges.every(inner => inner.modifiedRange.isEmpty());
+				}
+				// If there are no inner changes and modified is not empty, it's not a deletion
+				return false;
+			});
 
-			if (!allowHorizontal && !allowVertical) {
-				// When both code shifting options are disabled, use interleavedLines if only deletions,
-				// otherwise use side-by-side
-				state = allModifiedEmpty ? 'interleavedLines' : 'sideBySide';
+			if (allModifiedEmpty) {
+				state = 'interleavedLines';
 			} else if (allowHorizontal && supportsMixedLines) {
 				// When horizontal code shifting is enabled and diff supports it, use mixedLines
 				state = 'mixedLines';
@@ -314,7 +324,7 @@ export class InlineEditsView extends Disposable {
 			} else {
 				// Fallback: horizontal is enabled but diff doesn't support mixedLines, or only horizontal is enabled
 				// Use interleavedLines if only deletions, otherwise side-by-side
-				state = allModifiedEmpty ? 'interleavedLines' : 'sideBySide';
+				state = 'sideBySide';
 			}
 		}
 

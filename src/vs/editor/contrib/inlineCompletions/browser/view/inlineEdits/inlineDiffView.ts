@@ -187,11 +187,14 @@ export class OriginalEditorInlineDiffView extends Disposable {
 				const isMonospace = renderOptions.fontInfo.isMonospace;
 				const spaceWidth = renderOptions.fontInfo.spaceWidth;
 
+				const isModifiedEmpty = diff.modified.isEmpty || (diff.innerChanges && diff.innerChanges.length > 0 && diff.innerChanges.every(inner => inner.modifiedRange.isEmpty()));
 				// Calculate content bounds for original lines
-				const originalBounds = !diff.original.isEmpty && originalModel ? findContentBounds(originalModel, originalRange) : null;
+				const originalBounds = !diff.original.isEmpty && originalModel
+					? findContentBounds(originalModel, originalRange)
+					: null;
 
 				// Calculate content bounds for modified lines (only if not empty)
-				const modifiedBounds = !diff.modified.isEmpty ? findContentBounds(modifiedModel, modifiedRange) : null;
+				const modifiedBounds = !isModifiedEmpty ? findContentBounds(modifiedModel, modifiedRange) : null;
 
 				// Find the minimal bounding box across all lines (original + modified)
 				// If one is empty, use only the non-empty bounds
@@ -233,20 +236,33 @@ export class OriginalEditorInlineDiffView extends Disposable {
 					pathBuilderOriginal.moveTo(new Point(leftEdge + radius, originalBlockTop));
 					pathBuilderOriginal.lineTo(new Point(rightEdge - radius, originalBlockTop));
 					pathBuilderOriginal.curveTo(new Point(rightEdge, originalBlockTop), new Point(rightEdge, originalBlockTop + radius));
-					pathBuilderOriginal.lineTo(new Point(rightEdge, originalBlockBottom));
-					pathBuilderOriginal.lineTo(new Point(leftEdge, originalBlockBottom));
-					pathBuilderOriginal.lineTo(new Point(leftEdge, originalBlockTop + radius));
-					pathBuilderOriginal.curveTo(new Point(leftEdge, originalBlockTop), new Point(leftEdge + radius, originalBlockTop));
+					if (isModifiedEmpty) {
+						pathBuilderOriginal.lineTo(new Point(rightEdge, originalBlockBottom - radius));
+						pathBuilderOriginal.curveTo(new Point(rightEdge, originalBlockBottom), new Point(rightEdge - radius, originalBlockBottom));
+						pathBuilderOriginal.lineTo(new Point(leftEdge + radius, originalBlockBottom));
+						pathBuilderOriginal.curveTo(new Point(leftEdge, originalBlockBottom), new Point(leftEdge, originalBlockBottom - radius));
+						pathBuilderOriginal.lineTo(new Point(leftEdge, originalBlockTop + radius));
+						pathBuilderOriginal.curveTo(new Point(leftEdge, originalBlockTop), new Point(leftEdge + radius, originalBlockTop));
+					} else {
+						pathBuilderOriginal.lineTo(new Point(rightEdge, originalBlockBottom));
+						pathBuilderOriginal.lineTo(new Point(leftEdge, originalBlockBottom));
+						pathBuilderOriginal.lineTo(new Point(leftEdge, originalBlockTop + radius));
+						pathBuilderOriginal.curveTo(new Point(leftEdge, originalBlockTop), new Point(leftEdge + radius, originalBlockTop));
+					}
 
 					const pathOriginal = document.createElementNS('http://www.w3.org/2000/svg', 'path');
 					pathOriginal.setAttribute('d', pathBuilderOriginal.build());
-					pathOriginal.style.fill = 'var(--vscode-inlineEdit-originalBackground, transparent)';
-					pathOriginal.style.stroke = 'var(--vscode-inlineEdit-originalBorder)';
-					pathOriginal.style.strokeWidth = '1px';
+					if (!isModifiedEmpty) {
+						pathOriginal.style.fill = 'var(--vscode-inlineEdit-originalBackground, transparent)';
+						pathOriginal.style.stroke = 'var(--vscode-inlineEdit-originalBorder)';
+						pathOriginal.style.strokeWidth = '1px';
+					} else {
+						pathOriginal.style.fill = 'transparent';
+					}
 					paths.push(pathOriginal);
 				}
 
-				if (!diff.modified.isEmpty) {
+				if (!isModifiedEmpty) {
 
 					// Calculate positions for all modified lines (inserted) - single path around entire block
 					// Modified lines appear in the view zone after the original lines
@@ -392,3 +408,4 @@ let i = 0;
 function modelTokenizationFinished(model: ITextModel): IObservable<number> {
 	return observableFromEvent(model.onDidChangeTokens, () => i++);
 }
+
