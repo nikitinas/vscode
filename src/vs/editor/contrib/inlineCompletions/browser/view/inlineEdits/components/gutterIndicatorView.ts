@@ -372,7 +372,6 @@ export class InlineEditsGutterIndicator extends Disposable {
 
 		// Icon logic matching 1.107: show different icons based on state
 		const tabAction = this._tabAction.read(reader);
-		console.log('[GutterIndicatorView] tabAction:', tabAction);
 		const isHovered = this._isHoveredOverIconDebounced.read(reader) || this._isHoveredOverInlineEditDebounced.read(reader);
 		let icon;
 

@@ -187,8 +187,8 @@ export class OriginalEditorInlineDiffView extends Disposable {
 				const isMonospace = renderOptions.fontInfo.isMonospace;
 				const spaceWidth = renderOptions.fontInfo.spaceWidth;
 
-				const isModifiedEmpty = diff.modified.isEmpty || (diff.innerChanges && diff.innerChanges.length > 0 && diff.innerChanges.every(inner => inner.modifiedRange.isEmpty()));
-				const isOriginalEmpty = diff.original.isEmpty || (diff.innerChanges && diff.innerChanges.length > 0 && diff.innerChanges.every(inner => inner.originalRange.isEmpty()));
+				const isModifiedEmpty = diff.modified.isEmpty;
+				const isOriginalEmpty = diff.original.isEmpty;
 				if (isOriginalEmpty || isModifiedEmpty) {
 					continue;
 				}

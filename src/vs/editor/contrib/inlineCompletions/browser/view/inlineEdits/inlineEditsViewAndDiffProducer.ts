@@ -12,16 +12,18 @@ import { derivedDisposable, ObservablePromise, derived, IObservable, derivedOpts
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { ICodeEditor } from '../../../../../browser/editorBrowser.js';
 import { IDiffProviderFactoryService } from '../../../../../browser/widget/diffEditor/diffProviderFactoryService.js';
+import { LineRange } from '../../../../../common/core/lineRange.js';
 import { SingleLineEdit } from '../../../../../common/core/lineEdit.js';
 import { Position } from '../../../../../common/core/position.js';
 import { Range } from '../../../../../common/core/range.js';
 import { SingleTextEdit, TextEdit, AbstractText } from '../../../../../common/core/textEdit.js';
 import { TextLength } from '../../../../../common/core/textLength.js';
+import { IDocumentDiff } from '../../../../../common/diff/documentDiffProvider.js';
+import { DetailedLineRangeMapping, RangeMapping } from '../../../../../common/diff/rangeMapping.js';
 import { Command } from '../../../../../common/languages.js';
 import { TextModelText } from '../../../../../common/model/textModelText.js';
 import { IModelService } from '../../../../../common/services/model.js';
 import { ITextModel } from '../../../../../common/model.js';
-import { RangeMapping } from '../../../../../common/diff/rangeMapping.js';
 import { InlineCompletionsModel } from '../../model/inlineCompletionsModel.js';
 import { InlineEdit } from '../../model/inlineEdit.js';
 import { InlineCompletionItem } from '../../model/provideInlineCompletions.js';
@@ -236,6 +238,116 @@ function mergeWordReplacements(
 	)];
 }
 
+/**
+ * Normalize insertions at end of line that start with newline.
+ * Convert them to insertions at the beginning of next line.
+ * Only applies to changes with exactly 1 innerChange.
+ * Result has empty original range, adjusted modified range, and NO inner changes.
+ * Does NOT modify the models - only transforms the diff structure.
+ */
+function normalizeEndOfLineInsertions(
+	diff: IDocumentDiff,
+	originalModel: ITextModel,
+	modifiedModel: ITextModel
+): IDocumentDiff {
+	const newChanges = diff.changes.map(change => {
+		// Only process changes with exactly 1 innerChange
+		if (!change.innerChanges || change.innerChanges.length !== 1) {
+			return change;
+		}
+
+		const innerChange = change.innerChanges[0];
+
+		// Check if this is an insertion (empty original range)
+		if (!innerChange.originalRange.isEmpty()) {
+			return change;
+		}
+
+		// Get the modified text
+		const modifiedText = modifiedModel.getValueInRange(innerChange.modifiedRange);
+
+		// Check if modified text starts with newline
+		if (!modifiedText.startsWith('\n')) {
+			return change;
+		}
+
+		// Check if insertion is at the end of a line in the original
+		const originalLine = originalModel.getLineContent(innerChange.originalRange.startLineNumber);
+		const insertionColumn = innerChange.originalRange.startColumn;
+
+		// If not at end of line (allowing for trailing whitespace), keep as is
+		if (insertionColumn <= originalLine.trimEnd().length) {
+			return change;
+		}
+
+		// Normalize: create a change with empty original range at next line
+		// and adjusted modified range
+
+		// First, ensure the modified model has a line after the end of the text
+		// This allows us to include a trailing \n in the new range
+		const textEndLine = innerChange.modifiedRange.endLineNumber;
+		const nextLine = textEndLine + 1;
+
+		// Check if next line exists; if not, add it
+		if (modifiedModel.getLineCount() < nextLine) {
+			// Append a newline to create the next line
+			const modelEndPosition = modifiedModel.getPositionAt(modifiedModel.getValueLength());
+			modifiedModel.applyEdits([{
+				range: new Range(modelEndPosition.lineNumber, modelEndPosition.column, modelEndPosition.lineNumber, modelEndPosition.column),
+				text: '\n'
+			}]);
+		}
+
+		const newOriginalLine = innerChange.originalRange.startLineNumber + 1;
+		const newOriginalLineRange = new LineRange(newOriginalLine, newOriginalLine); // Empty range
+
+		// Modified range: the text "\ntext..." conceptually becomes "text...\n"
+		// The original text "\ntext" spans lines [M:C, M+k:D]
+		// After removing leading \n: text is on lines [M+1:1, M+k:D]
+		// To add trailing \n: we need to extend one more line [M+1:1, M+k+1:1]
+		const newModifiedStartLine = innerChange.modifiedRange.startLineNumber + 1;
+		const newModifiedEndLine = innerChange.modifiedRange.endLineNumber + 1;
+
+		// The modified line range
+		const newModifiedLineRange = new LineRange(newModifiedStartLine, newModifiedEndLine);
+
+		// Create a new inner change with adjusted ranges
+		// Original: empty range at beginning of next line
+		const newOriginalRange = new Range(
+			newOriginalLine,
+			1,
+			newOriginalLine,
+			1  // Empty range
+		);
+
+		// Modified: From line M+1 column 1 to line M+k+1 column 1
+		// This includes all text on line M+1 through M+k, plus the line break to M+k+1
+		const newModifiedRange = new Range(
+			newModifiedStartLine,
+			1,
+			newModifiedEndLine,
+			1  // Include the line break by going to next line
+		);
+
+		const newInnerChange = new RangeMapping(newOriginalRange, newModifiedRange);
+
+		// Return a new DetailedLineRangeMapping with the adjusted inner change
+		return new DetailedLineRangeMapping(
+			newOriginalLineRange,
+			newModifiedLineRange,
+			[newInnerChange]
+		);
+	});
+
+	return {
+		changes: newChanges,
+		moves: diff.moves,
+		identical: diff.identical,
+		quitEarly: diff.quitEarly
+	};
+}
+
+
 export class InlineEditsViewAndDiffProducer extends Disposable {
 	public static readonly hot = createHotClass(InlineEditsViewAndDiffProducer);
 
@@ -276,11 +388,13 @@ export class InlineEditsViewAndDiffProducer extends Disposable {
 			if (!p || !p.data) {
 				return undefined;
 			}
-			const result = p.data;
+			let result = p.data;
+
+			// Normalize end-of-line insertions that start with newline (updates modified model)
+			result = normalizeEndOfLineInsertions(result, this._originalModel.get()!, this._modifiedModel.get()!);
 
 			const rangeStartPos = edit.range.getStartPosition();
 			let innerChanges = result.changes.flatMap(c => c.innerChanges!);
-
 			// Merge word replacements to improve detection of single word replacement cases
 			innerChanges = mergeWordReplacements(innerChanges, this._originalModel.get()!, this._modifiedModel.get()!);
 
