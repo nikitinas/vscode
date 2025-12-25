@@ -82,7 +82,19 @@ function mergeWordReplacements(
 
 	// Step 1: Check if all changes are in the same line
 	const firstLine = innerChanges[0].originalRange.startLineNumber;
-	if (!innerChanges.every(c => c.originalRange.startLineNumber === firstLine)) {
+	const firstModifiedLine = innerChanges[0].modifiedRange.startLineNumber;
+	if (firstLine !== firstModifiedLine) {
+		// Original and modified text are on different lines, don't merge
+		return innerChanges;
+	}
+
+	if (!innerChanges.every(c =>
+		c.originalRange.startLineNumber === firstLine
+		&& c.originalRange.endLineNumber === firstLine
+		&& c.modifiedRange.startLineNumber === firstLine
+		&& c.modifiedRange.endLineNumber === firstLine
+	)) {
+		// Original text spans multiple lines or changes are on different lines, don't merge
 		return innerChanges;
 	}
 
